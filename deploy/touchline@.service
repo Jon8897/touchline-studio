@@ -1,0 +1,29 @@
+# One service per environment: touchline@production and touchline@staging
+[Unit]
+Description=Touchline Studio (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=touchline
+Group=touchline
+WorkingDirectory=/srv/touchline/%i/current
+ExecStart=/usr/bin/node --no-warnings=ExperimentalWarning /srv/touchline/%i/current/server.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+# Hardening: the app can only write to its own data and backups
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/touchline/%i/shared/data /srv/touchline/%i/shared/backups
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

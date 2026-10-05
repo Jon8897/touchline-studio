@@ -1,0 +1,100 @@
+# Build → test → staging (automatic) → production (after you approve)
+# One-time setup: see docs/PIPELINE.md
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build
+        run: node scripts/build.mjs --version "${GITHUB_SHA::7}"
+      - name: Automated tests
+        run: npm test
+      - name: Keep the release file
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/touchline-*.tar.gz
+            dist/preview.html
+          retention-days: 30
+
+  staging:
+    name: Deploy to staging
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: bash scripts/deploy.sh staging dist/touchline-*.tar.gz
+      - name: Smoke test
+        env:
+          SMOKE_AUTH: ${{ secrets.STAGING_AUTH }}
+        run: bash scripts/smoke.sh "${{ vars.STAGING_URL }}" "${GITHUB_SHA::7}"
+
+  production:
+    name: Deploy to production
+    needs: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Add yourself as a "required reviewer" on the production environment in GitHub:
+    # the pipeline then waits here until you press "Approve and deploy".
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Legal pages are filled in
+        run: |
+          mkdir -p /tmp/rel && tar -xzf dist/touchline-*.tar.gz -C /tmp/rel
+          bash scripts/check-legal.sh /tmp/rel/touchline/public
+      - name: SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: bash scripts/deploy.sh production dist/touchline-*.tar.gz
+      - name: Smoke test
+        run: bash scripts/smoke.sh "${{ vars.PRODUCTION_URL }}" "${GITHUB_SHA::7}"

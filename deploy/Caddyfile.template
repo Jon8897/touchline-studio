@@ -1,0 +1,14 @@
+# Written by server-setup.sh. Caddy gets and renews the HTTPS certificates automatically.
+__DOMAIN__ {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy 127.0.0.1:3000
+}
+# Staging: password protected so only you (and testers you give the password to) can see it
+__STAGING_DOMAIN__ {
+	encode zstd gzip
+	basic_auth {
+		__STAGING_USER__ __STAGING_HASH__
+	}
+	reverse_proxy 127.0.0.1:3001
+}

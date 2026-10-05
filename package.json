@@ -1,0 +1,12 @@
+{
+  "name": "touchline-studio",
+  "private": true,
+  "description": "Touchline Studio: football tactics, drills and weekly team posts for grassroots coaches",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test --test-reporter=spec tests/*.test.mjs",
+    "check": "node scripts/build.mjs --no-tar && node --test tests/*.test.mjs",
+    "dev": "node scripts/build.mjs --no-tar && cd dist/touchline && BASE_URL=http://localhost:3000 SIGNUP_CODE=dev APP_ENV=staging node --no-warnings server.js"
+  }
+}

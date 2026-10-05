@@ -1,0 +1,33 @@
+{
+  "_help": "Fill these in once. They are put into the Privacy policy, Terms, Safeguarding and Cookies pages when the site is built. The pipeline will not deploy to production while any of the required ones are empty.",
+  "businessName": "",
+  "businessType": "",
+  "companyNumber": "",
+  "address": "",
+  "contactEmail": "",
+  "responsiblePerson": "",
+  "icoRegistrationNumber": "",
+  "hostingProvider": "",
+  "hostingLocation": "",
+  "emailProvider": "",
+  "emailProviderLocation": "",
+  "effectiveDate": "",
+  "governingLaw": "England and Wales",
+  "_optional": [
+    "companyNumber"
+  ],
+  "_examples": {
+    "businessName": "Touchline Studio Ltd   (or your own name if you're a sole trader)",
+    "businessType": "a company registered in England and Wales   (or: a sole trader based in the UK)",
+    "companyNumber": ", company number 12345678   (include the comma; leave empty if you're a sole trader)",
+    "address": "1 High Street, Leeds LS1 1AA   (a registered office or service address is fine)",
+    "contactEmail": "hello@touchlinestudio.co.uk",
+    "responsiblePerson": "Jonathan Keefe, founder",
+    "icoRegistrationNumber": "ZB123456   (you get this when you pay the data protection fee)",
+    "hostingProvider": "Hetzner Online GmbH",
+    "hostingLocation": "the United Kingdom",
+    "emailProvider": "Resend, Inc.",
+    "emailProviderLocation": "the United States, under the UK International Data Transfer Addendum in their data processing agreement",
+    "effectiveDate": "1 November 2026"
+  }
+}

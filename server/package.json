@@ -1,0 +1,11 @@
+{
+  "name": "touchline-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Touchline Studio: football tactics, drills and weekly team posts",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server.js",
+    "admin": "node --no-warnings=ExperimentalWarning admin.js"
+  }
+}

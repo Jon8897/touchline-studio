@@ -58,6 +58,7 @@ const doc = ({ title, meta = '', head, body, bodyClass = '' }) => `<!doctype htm
 <title>${title}</title>
 <meta name="theme-color" content="#0b0f0e">
 <meta name="app-version" content="${version}">
+<meta name="author" content="KeefeCodes (https://keefecodes.com/)">
 <link rel="icon" href="${FAV}">
 ${meta}
 <style>${BASE_CSS}</style>

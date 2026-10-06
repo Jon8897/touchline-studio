@@ -2,6 +2,8 @@
 
 Animated football tactics, 100 drills, a session planner, fitness plans and one weekly link for players. Built for grassroots coaches.
 
+Created by [KeefeCodes](https://keefecodes.com/).
+
 ## What's in here
 
 | Folder | What it is |

@@ -128,3 +128,4 @@ ul.tick.big li{font-size:17px;padding-left:26px}
 .legal .ltable th{color:var(--fg);background:var(--panel);font-weight:700}
 .legal code{font-family:var(--f-mono);color:var(--fg)}
 .faqwrap details p a{color:var(--gold)}
+.kcredit{color:var(--muted);text-decoration:none;white-space:nowrap}.kcredit b{color:var(--gold);font-weight:700}.kcredit:hover b{text-decoration:underline}

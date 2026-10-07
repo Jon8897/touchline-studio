@@ -1,17 +1,17 @@
 {
   "_help": "Fill these in once. They are put into the Privacy policy, Terms, Safeguarding and Cookies pages when the site is built. The pipeline will not deploy to production while any of the required ones are empty.",
-  "businessName": "",
-  "businessType": "",
+  "businessName": "Jonathan Keefe trading as KeefeCodes",
+  "businessType": "a sole trader based in the UK",
   "companyNumber": "",
-  "address": "",
-  "contactEmail": "",
-  "responsiblePerson": "",
+  "address": "8 harriers Crescent, Liverpool L32 4AD",
+  "contactEmail": "admin@keefecodes.com",
+  "responsiblePerson": "Jonathan Keefe",
   "icoRegistrationNumber": "",
-  "hostingProvider": "",
-  "hostingLocation": "",
-  "emailProvider": "",
-  "emailProviderLocation": "",
-  "effectiveDate": "",
+  "hostingProvider": "IONOS",
+  "hostingLocation": "theUnited Kingdom",
+  "emailProvider": "Resend, Inc.",
+  "emailProviderLocation": "the United States, under the UK International Data Transfer Addendum in their data processing agreement",
+  "effectiveDate": "7 October 2026",
   "governingLaw": "England and Wales",
   "_optional": [
     "companyNumber",
@@ -29,6 +29,6 @@
     "hostingLocation": "the United Kingdom",
     "emailProvider": "Resend, Inc.",
     "emailProviderLocation": "the United States, under the UK International Data Transfer Addendum in their data processing agreement",
-    "effectiveDate": "1 November 2026"
+    "effectiveDate": "7 October 2026"
   }
 }

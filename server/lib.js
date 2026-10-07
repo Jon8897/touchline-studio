@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TE
 {const cols=db.prepare('PRAGMA table_info(users)').all().map(c=>c.name);
  if(!cols.includes('terms_accepted_at')) db.exec('ALTER TABLE users ADD COLUMN terms_accepted_at INTEGER');
  if(!cols.includes('terms_version')) db.exec('ALTER TABLE users ADD COLUMN terms_version TEXT');}
+{const sc=db.prepare('PRAGMA table_info(sessions)').all().map(c=>c.name);
+ if(!sc.includes('remember')) db.exec('ALTER TABLE sessions ADD COLUMN remember INTEGER NOT NULL DEFAULT 1');}
 
 /* ---------- helpers ---------- */
 const now=()=>Date.now();

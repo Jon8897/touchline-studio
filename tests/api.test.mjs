@@ -240,3 +240,19 @@ test('team sheet is published with the week and named in the link preview', asyn
   assert.deepEqual((await client().get('/api/public/weeks/' + p.json.slug)).json.data.sheet.subs, sheet.subs);
   assert.match((await client().get('/w/' + p.json.slug)).text, /content="Next match: v Rovers · Team sheet"/);
 });
+
+test('login: "keep me logged in" sets a 30-day cookie, otherwise a browser-session cookie; website shows who is logged in', async () => {
+  const a = client(); await signup(a, 'remember@example.com');
+  const anon = client();
+  let r = await anon.get('/'); assert.match(r.text, /Start free/); assert.doesNotMatch(r.text, /Logged in as/);
+  r = await a.get('/'); assert.match(r.text, /Logged in as <b>remember<\/b>/); assert.match(r.text, /Open my teams/);
+  r = await a.get('/guide'); assert.match(r.text, /Logged in as/);
+  assert.match(r.headers.get('cache-control'), /private/);
+  const b = client();
+  r = await b.post('/api/login', { email: 'remember@example.com', password: 'password-123' });
+  assert.equal(r.status, 200); assert.doesNotMatch(r.headers.get('set-cookie'), /Max-Age/);
+  r = await b.post('/api/login', { email: 'remember@example.com', password: 'password-123', remember: true });
+  assert.match(r.headers.get('set-cookie'), /Max-Age=2592000/);
+  r = await b.get('/api/me'); assert.equal(r.status, 200);
+  await b.post('/api/logout'); r = await b.get('/'); assert.doesNotMatch(r.text, /Logged in as/);
+});

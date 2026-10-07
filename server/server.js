@@ -16,11 +16,15 @@ function readPub(name){ // cached read of a file in public/, refreshed when the 
   const d=fs.readFileSync(f); fileCache.set(f,{m:st.mtimeMs,d}); return d;
 }
 const indexHtml=()=>readPub('index.html').toString('utf8');
+/* website pages: swap "Log in / Start free" for "Logged in as … / Open my teams" when the visitor has a session */
+const withLogin=(h,req)=>{let u=null; try{u=currentUser(req)}catch(e){} if(!u) return h;
+  const e=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  return h.replace(/<div class="lcta">[\s\S]*?<\/div>/,`<div class="lcta"><span class="lwho" title="${e(u.email)}">Logged in as <b>${e(u.name||u.email)}</b></span><a class="lbtn" href="/app#week">Open my teams</a></div>`)};
 const pageHtml=name=>{const b=readPub(name); if(!b) return null; let h=b.toString('utf8').replaceAll('__BASE__',CFG.base); if(CFG.contact) h=h.replaceAll('hello@touchlinestudio.com',CFG.contact); return h};
 const VERSION=(()=>{try{return fs.readFileSync(path.join(__dirname,'VERSION'),'utf8').trim()}catch(e){return 'dev'}})();
 const STATIC_TYPES={'.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 
-const SESSION_DAYS=30, MAX_BODY=3*1024*1024, USER_KEYS=['mydrills','plays','sessions'];
+const SESSION_DAYS=30, IDLE_MS=Math.max(1,+(process.env.SESSION_IDLE_HOURS||12))*3600e3, MAX_BODY=3*1024*1024, USER_KEYS=['mydrills','plays','sessions'];
 const COOKIE='tls_sid';
 
 /* ---------- prepared statements ---------- */
@@ -31,7 +35,8 @@ const Q={
   setLogin:db.prepare('UPDATE users SET last_login=? WHERE id=?'),
   setPass:db.prepare('UPDATE users SET pass=? WHERE id=?'),
   setName:db.prepare('UPDATE users SET name=? WHERE id=?'),
-  insSess:db.prepare('INSERT INTO sessions(token_hash,user_id,created,expires) VALUES(?,?,?,?)'),
+  insSess:db.prepare('INSERT INTO sessions(token_hash,user_id,created,expires,remember) VALUES(?,?,?,?,?)'),
+  touchSess:db.prepare('UPDATE sessions SET expires=? WHERE token_hash=?'),
   sess:db.prepare('SELECT * FROM sessions WHERE token_hash=? AND expires>?'),
   delSess:db.prepare('DELETE FROM sessions WHERE token_hash=?'),
   delUserSess:db.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash<>?'),
@@ -90,15 +95,20 @@ function readBody(req){return new Promise((resolve,reject)=>{let size=0; const c
   req.on('end',()=>{if(!chunks.length) return resolve({}); try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))}catch(e){reject(Object.assign(new Error('bad_json'),{code:400}))}});
   req.on('error',reject)})}
 function cookies(req){const out={}; (req.headers.cookie||'').split(';').forEach(p=>{const i=p.indexOf('='); if(i>0) out[p.slice(0,i).trim()]=decodeURIComponent(p.slice(i+1).trim())}); return out}
-function setCookie(res,value,maxAge){res.setHeader('Set-Cookie',`${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${CFG.secure?'; Secure':''}`)}
+/* maxAge null = a browser-session cookie (gone when the browser is closed) */
+function setCookie(res,value,maxAge){res.setHeader('Set-Cookie',`${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax${maxAge==null?'':'; Max-Age='+maxAge}${CFG.secure?'; Secure':''}`)}
 const ipOf=req=>(req.headers['x-forwarded-for']||'').split(',')[0].trim()||req.socket.remoteAddress||'';
 const hits=new Map();
 function limited(key,max,windowMs){const t=now(); let h=hits.get(key); if(!h||h.reset<t){h={n:0,reset:t+windowMs}; hits.set(key,h)} h.n++; return h.n>max}
 setInterval(()=>{const t=now(); for(const [k,h] of hits) if(h.reset<t) hits.delete(k)},600e3).unref();
 
 /* ---------- auth ---------- */
-function currentUser(req){const tok=cookies(req)[COOKIE]; if(!tok) return null; const s=Q.sess.get(sha(tok),now()); if(!s) return null; const u=Q.userById.get(s.user_id); if(u) u._tok=tok; return u||null}
-function startSession(res,user){const tok=rid(32); Q.insSess.run(sha(tok),user.id,now(),now()+SESSION_DAYS*864e5); Q.setLogin.run(now(),user.id); setCookie(res,tok,SESSION_DAYS*86400)}
+/* Sessions: "Keep me logged in" = 30 days. Otherwise the session ends after SESSION_IDLE_HOURS (default 12) without use,
+   or when the browser is closed. Each request pushes the idle deadline back (written at most every 5 minutes). */
+function currentUser(req){const tok=cookies(req)[COOKIE]; if(!tok) return null; const h=sha(tok), t=now(); const s=Q.sess.get(h,t); if(!s) return null;
+  if(!s.remember&&s.expires-t<IDLE_MS-300e3) Q.touchSess.run(t+IDLE_MS,h);
+  const u=Q.userById.get(s.user_id); if(u) u._tok=tok; return u||null}
+function startSession(res,user,remember){const tok=rid(32), keep=!!remember; Q.insSess.run(sha(tok),user.id,now(),now()+(keep?SESSION_DAYS*864e5:IDLE_MS),keep?1:0); Q.setLogin.run(now(),user.id); setCookie(res,tok,keep?SESSION_DAYS*86400:null)}
 const publicUser=u=>({id:u.id,email:u.email,name:u.name,plan:u.plan,maxTeams:u.max_teams,termsAcceptedAt:u.terms_accepted_at||null,termsVersion:u.terms_version||null});
 const publicTeam=(t,uid)=>({id:t.id,name:t.name,color:t.color,archived:!!t.archived,owner:t.owner_id===uid,role:t.owner_id===uid?'owner':'assistant',ownerName:t.owner_name||null,created:t.created});
 function canTeam(user,teamId){const t=Q.team.get(teamId); if(!t) return null; if(t.owner_id===user.id) return t; return Q.member.get(teamId,user.id)?t:null}
@@ -124,7 +134,7 @@ route('POST','/api/signup',async(req,res,{body})=>{
   const id=rid(); Q.insUser.run(id,email,name,hashPassword(pw),CFG.teamLimit,now()); db.prepare('UPDATE users SET terms_accepted_at=?, terms_version=? WHERE id=?').run(now(),CFG.termsVersion,id);
   const teamName=clean(body.team,60); if(teamName){const tid=rid(); Q.insTeam.run(tid,id,teamName,'#e7b53c',now(),now())}
   const nu=Q.userById.get(id); let joined=null; if(inv) joined=acceptInvite(nu,inv);
-  startSession(res,nu); Mail.welcome(email,name); send(res,201,{ok:true,joinedTeam:joined});
+  startSession(res,nu,body.remember===true); Mail.welcome(email,name); send(res,201,{ok:true,joinedTeam:joined});
 },{public:true});
 
 route('POST','/api/login',async(req,res,{body})=>{
@@ -132,7 +142,7 @@ route('POST','/api/login',async(req,res,{body})=>{
   if(limited('login:'+ipOf(req),20,900e3)||limited('login:'+email,10,900e3)) return fail(res,429,'Too many attempts. Wait 15 minutes and try again.');
   const u=Q.userByEmail.get(email);
   if(!u||!verifyPassword(String(body.password||''),u.pass)) return fail(res,401,'Wrong email or password.');
-  startSession(res,u); send(res,200,{ok:true});
+  startSession(res,u,body.remember===true); send(res,200,{ok:true});
 },{public:true});
 
 route('POST','/api/logout',(req,res,{user})=>{Q.delSess.run(sha(user._tok)); setCookie(res,'',0); send(res,200,{ok:true})});
@@ -220,7 +230,7 @@ route('POST','/api/password/reset',(req,res,{body})=>{
   const pw=String(body.password||''); if(pw.length<8) return fail(res,400,'Use a password of at least 8 characters.');
   const u=Q.userById.get(r.user_id); if(!u) return fail(res,400,'Account not found.');
   Q.setPass.run(hashPassword(pw),u.id); Q.useReset.run(u.id); Q.delAllSess.run(u.id);
-  startSession(res,u); Mail.passwordChanged(u.email,u.name); send(res,200,{ok:true});
+  startSession(res,u,false); Mail.passwordChanged(u.email,u.name); send(res,200,{ok:true});
 },{public:true});
 
 /* assistant coaches */
@@ -343,9 +353,9 @@ const server=http.createServer(async(req,res)=>{
     if(p==='/app'||p.startsWith('/app/')) return send(res,200,indexHtml(),{'Cache-Control':'no-cache'});
     if(p==='/demo'||p==='/demo/') return send(res,200,indexHtml().replace('</head>','<script>window.__DEMO__=1;</script></head>').replace(/<title>[^<]*<\/title>/,'<title>Demo · Touchline Studio</title>'),{'Cache-Control':'no-cache'});
     // the public website: front page, privacy, terms (fall back to the app if there is no front page)
-    if(p==='/'){const h=pageHtml('landing.html'); return send(res,200,h||indexHtml(),{'Cache-Control':'no-cache'})}
+    if(p==='/'){const h=pageHtml('landing.html'); return send(res,200,h?withLogin(h,req):indexHtml(),{'Cache-Control':'private, no-cache','Vary':'Cookie'})}
     const pm=p.match(/^\/([a-z][a-z-]{1,30})\/?$/);   // /privacy, /terms, /safeguarding, /cookies ... = public/<name>.html
-    if(pm&&!['index','landing'].includes(pm[1])){const h=pageHtml(pm[1]+'.html'); if(h) return send(res,200,h,{'Cache-Control':'no-cache'})}
+    if(pm&&!['index','landing'].includes(pm[1])){const h=pageHtml(pm[1]+'.html'); if(h) return send(res,200,withLogin(h,req),{'Cache-Control':'private, no-cache','Vary':'Cookie'})}
     // static files in public/ (images, favicon)
     const ext=path.extname(p).toLowerCase();
     if(STATIC_TYPES[ext]&&/^\/((fonts|vendor)\/)?[a-z0-9_-][a-z0-9._-]*$/i.test(p)){const b=readPub(p.slice(1)); if(b) return send(res,200,b,{'Content-Type':STATIC_TYPES[ext],'Cache-Control':ext==='.woff2'?'public, max-age=31536000, immutable':'public, max-age=86400'})}

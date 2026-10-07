@@ -59,6 +59,7 @@ function showAuth(cfg={},ctx={}){
       <div class="su" hidden><label class="fl" for="auTeam">First team name</label><input id="auTeam" class="inp" maxlength="60" placeholder="e.g. Riverside FC U18"></div>
       ${cfg.signupCodeRequired&&!ctx.invite?`<div class="su" hidden><label class="fl" for="auCode">Invite code</label><input id="auCode" class="inp" autocomplete="off" maxlength="60"><p class="hint">Touchline Studio is invite-only while we test it.</p></div>`:''}
       <div class="su" hidden><label class="check agree"><input type="checkbox" id="auAgree"><span>I’m 18 or over and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms and conditions</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</span></label></div>
+      <div class="rem"><label class="check"><input type="checkbox" id="auRemember"><span>Keep me logged in on this device for 30 days</span></label><p class="hint">Leave this unticked on a shared computer. You’ll be logged out after 12 hours without using Touchline, or when you close the browser.</p></div>
       <button class="btn authgo" id="auGo" type="submit">Log in</button>
       <p class="status" id="auMsg" aria-live="polite"></p>
     </form>
@@ -70,7 +71,7 @@ function showAuth(cfg={},ctx={}){
   const T={login:['Coach log in','Log in'],signup:['Create your account','Create account'],forgot:['Reset your password','Email me a reset link'],reset:['Choose a new password','Save new password']};
   const setMode=m=>{mode=m; const tabs=m==='login'||m==='signup';
     $('.seg.two',el).hidden=!tabs; $$('[data-at]',el).forEach(b=>b.setAttribute('aria-pressed',b.dataset.at===m)); $$('.su',el).forEach(x=>x.hidden=m!=='signup');
-    $('.em',el).hidden=m==='reset'; $('.pw',el).hidden=m==='forgot'; $('.pw2',el).hidden=m!=='reset';
+    $('.rem',el).hidden=!tabs; $('.em',el).hidden=m==='reset'; $('.pw',el).hidden=m==='forgot'; $('.pw2',el).hidden=m!=='reset';
     $('.authh',el).textContent=T[m][0]; $('#auGo').textContent=T[m][1]; $('#auPw').autocomplete=m==='login'?'current-password':'new-password';
     $('label[for="auPw"]',el).textContent=m==='reset'?'New password':'Password';
     $('#authLede').textContent=m==='forgot'?'Enter your email and we’ll send you a link to choose a new password.':m==='reset'?'Use at least 8 characters.':'Plan tactics, build sessions and send your players the week’s plan.';
@@ -84,7 +85,7 @@ function showAuth(cfg={},ctx={}){
     try{
       if(mode==='forgot'){await api('POST','/api/password/forgot',{email:$('#auEmail').value.trim()}); msg.className='status'; msg.textContent='If there’s an account with that email, we’ve sent a reset link. Check your inbox (and spam folder).'; $('#auGo').disabled=false; return}
       if(mode==='reset'){const a=$('#auPw').value, b=$('#auPw2').value; if(a!==b) throw new Error('The two passwords don’t match.'); await api('POST','/api/password/reset',{token:ctx.reset,password:a}); history.replaceState(null,'',appPath()); location.reload(); return}
-      const body={email:$('#auEmail').value.trim(),password:$('#auPw').value};
+      const body={email:$('#auEmail').value.trim(),password:$('#auPw').value,remember:$('#auRemember').checked};
       if(mode==='signup'){if(!$('#auAgree').checked) throw new Error('Please tick the box to confirm you’re 18 or over and agree to the Terms and Privacy policy.'); body.agree=true; body.name=$('#auName').value.trim(); body.team=$('#auTeam').value.trim(); const c=$('#auCode'); if(c) body.code=c.value.trim(); if(ctx.inviteToken) body.invite=ctx.inviteToken}
       const r=await api('POST',mode==='login'?'/api/login':'/api/signup',body);
       if(ctx.inviteToken){ if(mode==='signup'){try{localStorage.removeItem('tls:pendingInvite'); if(r.joinedTeam) localStorage.setItem('tls:justJoined',JSON.stringify({teamId:r.joinedTeam,team:ctx.invite.team}))}catch(e){}} history.replaceState(null,'',appPath()+'#week') }

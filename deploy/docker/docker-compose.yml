@@ -54,6 +54,14 @@ services:
       - "traefik.http.routers.touchline-beta.middlewares=touchline-beta-auth"
       - "traefik.http.middlewares.touchline-beta-auth.basicauth.users=${BETA_AUTH}"
       - "traefik.http.services.touchline-beta.loadbalancer.server.port=3000"
+      # Stripe can't log in to the password-protected beta, so its webhook gets its own route without the password.
+      # Safe: the app checks Stripe's signature on every webhook.
+      - "traefik.http.routers.touchline-beta-hook.entrypoints=websecure"
+      - "traefik.http.routers.touchline-beta-hook.rule=Host(`${BETA_HOST}`) && Path(`/api/webhooks/stripe`)"
+      - "traefik.http.routers.touchline-beta-hook.priority=1000"
+      - "traefik.http.routers.touchline-beta-hook.tls.certresolver=le"
+      - "traefik.http.routers.touchline-beta-hook.service=touchline-beta"
+      - "traefik.http.routers.touchline-beta.service=touchline-beta"
       - "traefik.http.routers.touchline-beta-http.entrypoints=web"
       - "traefik.http.routers.touchline-beta-http.rule=Host(`${BETA_HOST}`)"
       - "traefik.http.routers.touchline-beta-http.middlewares=touchline-beta-https"

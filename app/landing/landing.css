@@ -139,3 +139,6 @@ ul.tick.big li{font-size:17px;padding-left:26px}
 .gsteps{padding-left:22px}.gsteps li{margin:6px 0}
 .gtip{border-left:3px solid var(--gold);padding:8px 12px;background:color-mix(in srgb,var(--gold) 8%,transparent);border-radius:0 10px 10px 0;color:var(--fg)!important}
 .howguide{margin:18px 0 0}
+.lwho{font-size:13px;color:var(--muted);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}.lwho b{color:var(--fg)}
+@media(max-width:600px){.lwho{display:none}}
+.lcta{align-items:center}

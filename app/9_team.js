@@ -245,7 +245,7 @@ function cloudNoTeam(){return `<div class="card authcard"><p class="eyebrow">Wel
   ${SRV.teams.filter(t=>t.archived&&t.owner).map(t=>`<div class="row teamrow"><span class="tdot" style="--c:${t.color}"></span><b>${esc(t.name)}</b><span class="bsp"></span><button class="mini" data-trest="${t.id}">Restore</button></div>`).join('')}
   <div class="frow"><button class="btn ghost" id="acLogout">Log out</button></div></div>`}
 function cloudBar(){const t=curTeam(), act=activeTeams();
-  return `<div class="wkbar"><div><p class="eyebrow">Team week <span class="syncdot" id="syncDot" data-s="saved" title="All changes saved"></span></p><h2>${esc(t.name)}</h2></div><div class="wkbar-btns"><button class="btn ghost" id="wkPreview">Preview as player</button></div></div>
+  return `<div class="wkbar"><div><p class="eyebrow">Team week <span class="syncdot" id="syncDot" data-s="saved" title="All changes saved"></span></p><h2>${esc(t.name)}</h2></div><div class="wkbar-btns"><a class="btn ghost" href="/guide" target="_blank" rel="noopener">How to use</a><button class="btn ghost" id="wkPreview">Preview as player</button></div></div>
   <div class="teamsw" role="tablist" aria-label="Your teams">${act.map(x=>`<button role="tab" class="tchip" data-team="${x.id}" aria-selected="${x.id===SRV.tid}" style="--c:${x.color}"><span class="tdot"></span>${esc(x.name)}${x.owner?'':'<small class="asst">Asst</small>'}</button>`).join('')}<button class="tchip add" data-goteams>+ Add team</button></div>`}
 function coachesCard(){const t=curTeam(), M=SRV.members; if(!t||!M) return '';
   const own=M.you==='owner';

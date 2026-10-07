@@ -33,7 +33,7 @@ ${cta?`<p style="margin:22px 0 10px"><a href="${esc(ctaUrl)}" style="display:inl
 </td></tr>
 <tr><td style="padding:14px 24px 22px;font-size:12px;line-height:1.5;color:#6b7774;border-top:1px solid #e6eae8">${esc(foot||'You’re receiving this because of your Touchline Studio account.')}</td></tr>
 </table></td></tr></table></body></html>`;
-  const text=[title,'',intro,'',...paras.flatMap(p=>[p,'']),...(cta?[`${cta}: ${ctaUrl}`,'']:[]),'—',foot||'Touchline Studio'].join('\n');
+  const text=[title,'',intro,'',...paras.flatMap(p=>[p,'']),...(cta?[`${cta}: ${ctaUrl}`,'']:[]),'-',foot||'Touchline Studio'].join('\n');
   return {html,text};
 }
 

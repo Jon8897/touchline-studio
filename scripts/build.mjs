@@ -98,7 +98,7 @@ const landingHtml = doc({
 /* ---------- 3. legal and info pages (/privacy, /terms, /safeguarding, ...) ---------- */
 const nav = landingBody.slice(0, landingBody.indexOf('<main>')).replace(/href="#(demo|features|how|pricing|faq)"/g, 'href="/#$1"');
 const foot = landingBody.slice(landingBody.indexOf('<footer'));
-const PAGE_TITLES = { refunds: 'Refund and cancellation policy', privacy: 'Privacy policy', terms: 'Terms and conditions', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
+const PAGE_TITLES = { guide: 'How to use Touchline', refunds: 'Refund and cancellation policy', privacy: 'Privacy policy', terms: 'Terms and conditions', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
 const pages = {};
 for (const f of fs.readdirSync(path.join(APP, 'pages')).filter(f => f.endsWith('.html'))) {
   const name = f.replace(/\.html$/, '');

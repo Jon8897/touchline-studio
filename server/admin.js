@@ -12,7 +12,11 @@
    node admin.js report-done <id>              mark a report as dealt with
    node admin.js take-down <link or code>      remove a published player page (e.g. after a concern)
    node admin.js export-user <email>           write a coach's data to a file (for a data request by email)
-   node admin.js inactive [months]             coaches who haven't logged in for a while (default 24 months) */
+   node admin.js inactive [months]             coaches who haven't logged in for a while (default 24 months)
+   node admin.js stripe-setup                  create the Stripe products, prices, founder coupon, billing portal and webhook (prints the settings to copy into .env)
+   node admin.js comp <email> [months] [teams] give a coach free access (demo / partner accounts); months 0 removes it
+   node admin.js founders [--mark-all]         list founding coaches, or mark everyone who has signed up so far
+   node admin.js billing <email>               a coach's plan and Stripe status */
 process.removeAllListeners('warning');
 process.on('warning',w=>{if(w.name!=='ExperimentalWarning') console.warn(w)});
 const crypto=require('node:crypto'), path=require('node:path');
@@ -35,7 +39,10 @@ switch(cmd){
     db.prepare('UPDATE users SET max_teams=? WHERE id=?').run(n,u.id); console.log(`${u.email} can now have ${n} active team(s).`); break}
   case 'delete-user':{
     const u=user(args[0]); if(args[1]!=='--yes'){console.log(`This deletes ${u.email} and all their teams, drills and posts.\nRun again with --yes to confirm:  node admin.js delete-user ${u.email} --yes`); break}
-    db.prepare('DELETE FROM users WHERE id=?').run(u.id); console.log('Deleted.'); break}
+    const finish=()=>{db.prepare('DELETE FROM users WHERE id=?').run(u.id); console.log('Deleted.')};
+    if(u.billing_subscription&&['active','trialing','past_due','unpaid','incomplete'].includes(u.billing_status)){
+      require('./billing').stripe('DELETE',`/v1/subscriptions/${encodeURIComponent(u.billing_subscription)}`).then(()=>{console.log('Stripe subscription cancelled.'); finish()}).catch(e=>{console.error('Could not cancel their Stripe subscription ('+e.message+'). Nothing deleted.'); process.exit(1)});
+    } else finish(); break}
   case 'stats':{
     const c=t=>db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n;
     console.log(`Coaches ${c('users')} · Teams ${c('teams')} · Published weeks ${c('weeks')} · Player views ${db.prepare('SELECT COALESCE(SUM(views),0) n FROM weeks').get().n}`); break}
@@ -79,5 +86,45 @@ switch(cmd){
     if(!rows.length) console.log(`No coaches inactive for ${m}+ months.`);
     for(const u of rows) console.log(`${u.email.padEnd(32)} ${u.name.padEnd(22)} last login ${d(u.last_login||u.created)}`);
     if(rows.length) console.log(`\nEmail them, wait 30 days, then remove with: node admin.js delete-user <email> --yes`); break}
-  default: console.log(require('node:fs').readFileSync(__filename,'utf8').split('\n').slice(1,15).join('\n').replace(/^\/\*|\*\/$/g,''));
+  case 'stripe-setup':{
+    const {stripe,B}=require('./billing'); const {CFG}=require('./lib');
+    if(!B.key){console.error('Set STRIPE_SECRET_KEY in .env first (sk_test_... on staging, sk_live_... on production).'); process.exit(1)}
+    (async()=>{
+      const mode=B.liveMode?'LIVE':'TEST'; console.log(`Creating Touchline Studio products in Stripe ${mode} mode…`);
+      const prod=(name,desc)=>stripe('POST','/v1/products',{name,description:desc,metadata:{app:'touchline'}});
+      const price=(product,amount,interval,nick)=>stripe('POST','/v1/prices',{product,unit_amount:amount,currency:'gbp',recurring:{interval},nickname:nick,tax_behavior:'inclusive',metadata:{app:'touchline'}});
+      const coach=await prod('Touchline Studio Coach','1 team, unlimited weekly links, assistant coaches');
+      const club=await prod('Touchline Studio Club','Up to 12 teams for a club');
+      const extra=await prod('Touchline Studio extra team','One more active team on the Coach plan');
+      const p={COACH_MONTHLY:await price(coach.id,499,'month','Coach monthly'),COACH_YEARLY:await price(coach.id,3900,'year','Coach yearly'),CLUB_MONTHLY:await price(club.id,1999,'month','Club monthly'),
+        EXTRA_TEAM_MONTHLY:await price(extra.id,200,'month','Extra team monthly'),EXTRA_TEAM_YEARLY:await price(extra.id,2000,'year','Extra team yearly')};
+      const coupon=await stripe('POST','/v1/coupons',{percent_off:50,duration:'forever',name:'Founding coach: half price for life',metadata:{app:'touchline'}});
+      const portal=await stripe('POST','/v1/billing_portal/configurations',{business_profile:{headline:'Touchline Studio: manage your plan',privacy_policy_url:CFG.base+'/privacy',terms_of_service_url:CFG.base+'/terms'},
+        features:{customer_update:{enabled:true,allowed_updates:['email','address']},invoice_history:{enabled:true},payment_method_update:{enabled:true},
+          subscription_cancel:{enabled:true,mode:'at_period_end',cancellation_reason:{enabled:true,options:['too_expensive','missing_features','unused','other']}},
+          subscription_update:{enabled:true,default_allowed_updates:['price'],proration_behavior:'create_prorations',products:[{product:coach.id,prices:[p.COACH_MONTHLY.id,p.COACH_YEARLY.id]},{product:club.id,prices:[p.CLUB_MONTHLY.id]}]}}});
+      const hook=await stripe('POST','/v1/webhook_endpoints',{url:CFG.base+'/api/webhooks/stripe',description:'Touchline Studio ('+CFG.env+')',
+        enabled_events:['checkout.session.completed','customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','customer.subscription.paused','customer.subscription.resumed','invoice.paid','invoice.payment_succeeded','invoice.payment_failed']});
+      console.log(`\nDone. Add these lines to this site's .env, then restart it:\n`);
+      for(const [k,v] of Object.entries(p)) console.log(`STRIPE_PRICE_${k}=${v.id}`);
+      console.log(`STRIPE_FOUNDER_COUPON=${coupon.id}\nSTRIPE_PORTAL_CONFIG=${portal.id}\nSTRIPE_WEBHOOK_SECRET=${hook.secret}\nPAYMENTS=on`);
+      console.log(`\nWebhook sends to ${hook.url}. Run this once on staging (test keys) and once on production (live keys).`);
+    })().catch(e=>{console.error('Stripe said: '+e.message); process.exit(1)}); break}
+  case 'comp':{
+    const u=user(args[0]); const months=args[1]===undefined?12:+args[1]; const teams=args[2]?Math.max(1,+args[2]):Math.max(u.max_teams||3,3);
+    const until=months>0?Date.now()+months*30.44*864e5:null;
+    db.prepare('UPDATE users SET comp_until=?, max_teams=? WHERE id=?').run(until,teams,u.id);
+    console.log(until?`${u.email} has free access with ${teams} teams until ${d(until)}.`:`Free access removed for ${u.email}.`); break}
+  case 'founders':{
+    if(args[0]==='--mark-all'){const r=db.prepare('UPDATE users SET founder=1 WHERE founder=0').run(); console.log(`${r.changes} coach(es) marked as founding coaches. They get the founder discount at checkout${process.env.FOUNDER_GRACE_UNTIL?` and keep full access until ${process.env.FOUNDER_GRACE_UNTIL}`:''}.`); break}
+    const rows=db.prepare('SELECT email,name,created,plan,billing_status FROM users WHERE founder=1 ORDER BY created').all();
+    if(!rows.length) console.log('No founding coaches yet. Mark everyone so far with: node admin.js founders --mark-all');
+    for(const u of rows) console.log(`${u.email.padEnd(32)} ${u.name.padEnd(22)} joined ${d(u.created)}  ${u.plan}${u.billing_status?' / '+u.billing_status:''}`); break}
+  case 'billing':{
+    const u=user(args[0]); const {entitlements}=require('./billing'); const e=entitlements(u);
+    console.log(`${u.email}\n  access:   ${e.label}  (${Number.isFinite(e.teams)?e.teams:'∞'} teams, ${Number.isFinite(e.weeksPerTeam)?e.weeksPerTeam:'unlimited'} live weeks per team, assistants ${e.assistants?'yes':'no'})`);
+    console.log(`  stripe:   customer ${u.billing_customer||'-'}  subscription ${u.billing_subscription||'-'}  status ${u.billing_status||'-'}`);
+    console.log(`  plan:     ${u.plan}${u.billing_interval?' ('+u.billing_interval+'ly)':''}  extra teams ${u.extra_teams||0}  renews/ends ${u.period_end?d(u.period_end):'-'}${u.cancel_at_end?'  CANCELS AT PERIOD END':''}  trial end ${u.trial_end?d(u.trial_end):'-'}`);
+    console.log(`  founder:  ${u.founder?'yes':'no'}   complimentary until: ${u.comp_until?d(u.comp_until):'-'}`); break}
+  default: console.log(require('node:fs').readFileSync(__filename,'utf8').split('\n').slice(1,19).join('\n').replace(/^\/\*|\*\/$/g,''));
 }

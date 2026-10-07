@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const PUB = path.join(ROOT, 'dist', 'touchline', 'public');
 const scripts = html => [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 
-for (const f of ['index.html', 'landing.html', 'privacy.html', 'terms.html', 'safeguarding.html', 'cookies.html', 'og.png'])
+for (const f of ['index.html', 'landing.html', 'privacy.html', 'terms.html', 'safeguarding.html', 'cookies.html', 'refunds.html', 'acceptable-use.html', 'og.png'])
   test(`built ${f}`, () => assert.ok(fs.statSync(path.join(PUB, f)).size > 1000, `${f} is missing or empty`));
 
 for (const [name, file] of [['app', path.join(PUB, 'index.html')], ['front page', path.join(PUB, 'landing.html')], ['preview', path.join(ROOT, 'dist', 'preview.html')]])
@@ -21,11 +21,11 @@ for (const [name, file] of [['app', path.join(PUB, 'index.html')], ['front page'
 
 test('legal pages are linked from the front page footer', () => {
   const html = fs.readFileSync(path.join(PUB, 'landing.html'), 'utf8');
-  for (const p of ['/privacy', '/terms', '/safeguarding', '/cookies']) assert.ok(html.includes(`href="${p}"`), `footer links to ${p}`);
+  for (const p of ['/privacy', '/terms', '/safeguarding', '/cookies', '/refunds', '/acceptable-use']) assert.ok(html.includes(`href="${p}"`), `footer links to ${p}`);
 });
 
 test('no draft markers left in the legal pages', () => {
-  for (const f of ['privacy.html', 'terms.html', 'safeguarding.html', 'cookies.html']) {
+  for (const f of ['privacy.html', 'terms.html', 'safeguarding.html', 'cookies.html', 'refunds.html', 'acceptable-use.html']) {
     const html = fs.readFileSync(path.join(PUB, f), 'utf8');
     assert.ok(!/\{\{\w+\}\}/.test(html), `${f} has an unreplaced {{detail}}`);
     if (process.env.REQUIRE_FINAL_LEGAL) assert.ok(!html.includes('[fill in:'), `${f} still has blanks: fill in app/legal-details.json`);

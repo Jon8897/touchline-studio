@@ -9,7 +9,7 @@ H="$("${C[@]}" "$URL/healthz")" || fail "no answer from $URL/healthz"
 echo "health: $H"
 [[ "$H" == *'"ok":true'* ]] || fail "unhealthy"
 [[ -z "$WANT" || "$H" == *"\"version\":\"$WANT\""* ]] || fail "expected version $WANT"
-for p in / /app /demo /privacy /terms /safeguarding /cookies /og.png; do
+for p in / /app /demo /privacy /terms /refunds /acceptable-use /safeguarding /cookies /og.png; do
   code="$("${C[@]}" -o /dev/null -w '%{http_code}' "$URL$p")" || fail "$p"
   [[ "$code" == 200 ]] || fail "$p returned $code"; echo "ok  $p"
 done

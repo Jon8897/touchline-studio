@@ -22,7 +22,7 @@ ENVEX="$HERE/../.env.example"; [[ -f "$ENVEX" ]] || ENVEX="$HERE/../server/.env.
 echo "==> System packages: Node.js 22, Caddy, firewall, brute-force protection, automatic security updates"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y curl ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https ufw fail2ban unattended-upgrades sqlite3
+apt-get install -y curl ca-certificates gnupg debian-keyring debian-archive-keyring apt-transport-https ufw fail2ban unattended-upgrades sqlite3 openssl
 if ! command -v node >/dev/null || ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)'; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; apt-get install -y nodejs
 fi
@@ -50,7 +50,7 @@ mkenv() { # name port url
   install -d -o root -g root /srv/touchline/$E /srv/touchline/$E/releases
   install -d -o touchline -g touchline -m 750 "$S" "$S/data" "$S/backups"
   if [[ ! -f "$S/.env" ]]; then
-    local CODE; CODE="$(tr -dc 'A-HJ-NP-Z2-9' </dev/urandom | head -c 8)"
+    local CODE; CODE="$(openssl rand 400 | LC_ALL=C tr -dc 'A-HJ-NP-Z2-9' | cut -c1-8)"
     sed -e "s#^BASE_URL=.*#BASE_URL=$URL#" -e "s#^SIGNUP_CODE=.*#SIGNUP_CODE=$CODE#" -e "s#^PORT=.*#PORT=$P#" \
         -e "s#^APP_ENV=.*#APP_ENV=$E#" -e "s#^DB_PATH=.*#DB_PATH=$S/data/touchline.db#" "$ENVEX" > "$S/.env"
     echo "   $E: created $S/.env (invite code $CODE)"
@@ -69,7 +69,7 @@ systemctl enable touchline@production touchline@staging >/dev/null
 echo "==> HTTPS (Caddy) for $DOMAIN and $STAGING"
 SPASS=""
 if [[ ! -f /etc/caddy/Caddyfile ]] || ! grep -q "$STAGING" /etc/caddy/Caddyfile; then
-  SPASS="$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 16)"; HASH="$(caddy hash-password --plaintext "$SPASS")"
+  SPASS="$(openssl rand 400 | LC_ALL=C tr -dc 'a-zA-Z0-9' | cut -c1-16)"; HASH="$(caddy hash-password --plaintext "$SPASS")"
   sed -e "s#__STAGING_DOMAIN__#$STAGING#g" -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__STAGING_USER__#$SUSER#" -e "s#__STAGING_HASH__#$HASH#" "$HERE/Caddyfile.template" > /etc/caddy/Caddyfile
 fi
 systemctl reload caddy || systemctl restart caddy

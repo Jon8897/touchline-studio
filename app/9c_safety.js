@@ -35,8 +35,8 @@ function initSafety(){
   if(SRV.termsVersion&&SRV.user&&SRV.user.termsVersion!==SRV.termsVersion){
     const el=document.createElement('div'); el.className='sheet'; el.id='termsSheet';
     el.innerHTML=`<div class="sheet-in pick" role="dialog" aria-modal="true" aria-labelledby="tmH"><div class="sheet-head"><div><p class="eyebrow">Please review</p><h2 id="tmH">${SRV.user.termsVersion?'We’ve updated our terms':'Before you carry on'}</h2></div></div>
-      <div class="sheet-scroll"><p class="muted" style="margin:0 0 12px">Please read and agree to the <a href="/terms" target="_blank" rel="noopener">Terms of use</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a> to keep using Touchline Studio.</p>
-      <label class="check agree"><input type="checkbox" id="tmAgree"><span>I’m 18 or over and I agree to the Terms of use and Privacy policy.</span></label>
+      <div class="sheet-scroll"><p class="muted" style="margin:0 0 12px">Please read and agree to the <a href="/terms" target="_blank" rel="noopener">Terms and conditions</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a> to keep using Touchline Studio.</p>
+      <label class="check agree"><input type="checkbox" id="tmAgree"><span>I’m 18 or over and I agree to the Terms and conditions and Privacy policy.</span></label>
       <div class="frow"><button class="btn" id="tmGo">Continue</button><button class="btn ghost" id="tmOut">Log out</button></div><p class="status" id="tmSt"></p></div></div>`;
     document.body.appendChild(el);
     el.addEventListener('click',async e=>{

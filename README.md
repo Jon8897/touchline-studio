@@ -10,12 +10,13 @@ Created by [KeefeCodes](https://keefecodes.com/).
 |---|---|
 | `app/` | The app and website: `1_shell.html` + numbered `.js` files (the app), `landing/` (front page), `pages/` (privacy, terms, safeguarding, cookies), `assets/` (share image, fonts, QR library) |
 | `app/legal-details.json` | **Your business details for the legal pages. Fill this in before going live.** |
-| `server/` | The Node.js server: accounts, teams, assistants, emails, player links (no npm packages needed) |
+| `server/` | The Node.js server: accounts, teams, assistants, emails, player links, plans and Stripe payments (`billing.js`). No npm packages needed |
 | `scripts/` | `build.mjs` (builds everything into `dist/`), `deploy.sh`, `smoke.sh`, `check-legal.sh` |
 | `tests/` | Automated tests: the whole API end to end, plus checks on the built pages |
-| `deploy/` | Server setup, the release command with automatic rollback, service and HTTPS config |
+| `deploy/docker/` | **Your server:** Dockerfile, compose file for Traefik, `setup-docker-host.sh`, and `touchline-docker` (deploy, rollback, restart, admin) |
+| `deploy/` | Alternative for a fresh server without Docker (Caddy + systemd) |
 | `.github/workflows/pipeline.yml` | Build → test → staging → (approve) → production |
-| `docs/` | [Pipeline setup & soft launch](docs/PIPELINE.md) · [Running the service](docs/OPERATIONS.md) |
+| `docs/` | [Going live: server, pipeline and payments](docs/PIPELINE.md) · [Running the service](docs/OPERATIONS.md) |
 
 ## Commands (Node.js 22.13 or newer)
 

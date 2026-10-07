@@ -20,7 +20,7 @@ version = version.slice(0, 12);
 
 /* order matters: later files use what earlier ones define */
 const APP_JS = ['2_engine', '3_formations', '3b_plans', '3c_context', '3d_playbook', '3e_phases', '3f_defvar', '3g_attvar', '4_positions',
-  '5_drills', '5b_drills', '5c_drills', '7b_compose', '7_coach', '8_sessions', '8b_drilledit', '9_team', '9b_cloud', '9c_safety', '9d_sheet', '6_app'];
+  '5_drills', '5b_drills', '5c_drills', '7b_compose', '7_coach', '8_sessions', '8b_drilledit', '9_team', '9b_cloud', '9c_safety', '9d_sheet', '9e_billing', '6_app'];
 const ENGINE_JS = ['2_engine', '3_formations', '3b_plans', '3c_context', '3d_playbook', '3e_phases', '3f_defvar', '3g_attvar'];
 const js = list => list.map(n => read(path.join(APP, n + '.js'))).join('\n');
 
@@ -96,7 +96,7 @@ const landingHtml = doc({
 /* ---------- 3. legal and info pages (/privacy, /terms, /safeguarding, ...) ---------- */
 const nav = landingBody.slice(0, landingBody.indexOf('<main>')).replace(/href="#(demo|features|how|pricing|faq)"/g, 'href="/#$1"');
 const foot = landingBody.slice(landingBody.indexOf('<footer'));
-const PAGE_TITLES = { privacy: 'Privacy policy', terms: 'Terms of use', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
+const PAGE_TITLES = { refunds: 'Refund and cancellation policy', privacy: 'Privacy policy', terms: 'Terms and conditions', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
 const pages = {};
 for (const f of fs.readdirSync(path.join(APP, 'pages')).filter(f => f.endsWith('.html'))) {
   const name = f.replace(/\.html$/, '');
@@ -114,7 +114,7 @@ const previewCss = `${landingCss}
 body.sitemode{padding-bottom:0}
 body.sitemode>*:not(#site){display:none!important}
 body:not(.sitemode)>#site{display:none}
-#site a[href="/privacy"],#site a[href="/terms"],#site a[href="/safeguarding"],#site a[href="/cookies"]{display:none}
+#site a[href="/privacy"],#site a[href="/terms"],#site a[href="/safeguarding"],#site a[href="/cookies"],#site a[href="/refunds"],#site a[href="/acceptable-use"]{display:none}
 .homebar{position:relative;z-index:25}
 @media(max-width:600px){.homebar span{display:none}}`;
 const previewLanding = landingJs.replace(/^\/\* redirect old app links[\s\S]*?\n[\s\S]*?\n/, '');
@@ -128,14 +128,14 @@ const previewHtml = doc({
 /* ---------- write ---------- */
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(PUB, { recursive: true });
-for (const f of ['server.js', 'lib.js', 'mailer.js', 'admin.js', 'package.json', '.env.example']) fs.copyFileSync(path.join(SRV, f), path.join(OUT, f));
+for (const f of ['server.js', 'lib.js', 'mailer.js', 'billing.js', 'admin.js', 'package.json', '.env.example']) fs.copyFileSync(path.join(SRV, f), path.join(OUT, f));
 fs.writeFileSync(path.join(OUT, 'VERSION'), version + '\n');
 fs.writeFileSync(path.join(PUB, 'index.html'), appHtml);
 fs.writeFileSync(path.join(PUB, 'landing.html'), landingHtml);
 for (const [n, h] of Object.entries(pages)) fs.writeFileSync(path.join(PUB, n + '.html'), h);
 fs.cpSync(path.join(APP, 'assets'), PUB, { recursive: true });
 fs.mkdirSync(path.join(OUT, 'deploy'), { recursive: true });
-for (const f of fs.readdirSync(path.join(ROOT, 'deploy'))) fs.copyFileSync(path.join(ROOT, 'deploy', f), path.join(OUT, 'deploy', f));
+fs.cpSync(path.join(ROOT, 'deploy'), path.join(OUT, 'deploy'), { recursive: true });
 fs.writeFileSync(path.join(DIST, 'preview.html'), previewHtml);
 
 if (!process.argv.includes('--no-tar')) {

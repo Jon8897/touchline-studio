@@ -1,0 +1,66 @@
+# Touchline Studio on a server that already runs Traefik (network "public", entrypoints web/websecure, cert resolver "le").
+# Lives in /opt/apps/touchline. Image tags and host names come from the .env file next to this one,
+# which `touchline-docker` updates on each release. Don't edit the image lines by hand.
+services:
+  touchline-live:
+    image: ${LIVE_IMAGE:-touchline:none}
+    container_name: touchline-live
+    restart: unless-stopped
+    env_file: live.env
+    environment:
+      APP_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DB_PATH: /app/data/touchline.db
+    volumes:
+      - ./live/data:/app/data
+      - ./live/backups:/app/backups
+    networks: [public]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=public"
+      - "traefik.http.routers.touchline.entrypoints=websecure"
+      - "traefik.http.routers.touchline.rule=Host(`${LIVE_HOST}`)"
+      - "traefik.http.routers.touchline.tls.certresolver=le"
+      - "traefik.http.services.touchline.loadbalancer.server.port=3000"
+      - "traefik.http.routers.touchline-http.entrypoints=web"
+      - "traefik.http.routers.touchline-http.rule=Host(`${LIVE_HOST}`)"
+      - "traefik.http.routers.touchline-http.middlewares=touchline-https"
+      - "traefik.http.middlewares.touchline-https.redirectscheme.scheme=https"
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+
+  touchline-beta:
+    image: ${BETA_IMAGE:-touchline:none}
+    container_name: touchline-beta
+    restart: unless-stopped
+    env_file: beta.env
+    environment:
+      APP_ENV: staging
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DB_PATH: /app/data/touchline.db
+    volumes:
+      - ./beta/data:/app/data
+      - ./beta/backups:/app/backups
+    networks: [public]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=public"
+      - "traefik.http.routers.touchline-beta.entrypoints=websecure"
+      - "traefik.http.routers.touchline-beta.rule=Host(`${BETA_HOST}`)"
+      - "traefik.http.routers.touchline-beta.tls.certresolver=le"
+      - "traefik.http.routers.touchline-beta.middlewares=touchline-beta-auth"
+      - "traefik.http.middlewares.touchline-beta-auth.basicauth.users=${BETA_AUTH}"
+      - "traefik.http.services.touchline-beta.loadbalancer.server.port=3000"
+      - "traefik.http.routers.touchline-beta-http.entrypoints=web"
+      - "traefik.http.routers.touchline-beta-http.rule=Host(`${BETA_HOST}`)"
+      - "traefik.http.routers.touchline-beta-http.middlewares=touchline-https"
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+
+networks:
+  public:
+    external: true

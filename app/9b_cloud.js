@@ -5,7 +5,9 @@ const pend={};
 async function api(method,url,body){
   const r=await fetch(url,{method,credentials:'same-origin',headers:{'Content-Type':'application/json','X-TLS':'1'},body:body?JSON.stringify(body):undefined});
   let j={}; try{j=await r.json()}catch(e){}
-  if(!r.ok){const e=new Error(j.error||'Something went wrong. Try again.'); e.status=r.status; e.data=j; throw e}
+  if(!r.ok){const e=new Error(j.error||'Something went wrong. Try again.'); e.status=r.status; e.data=j; e.code=j.code;
+    if(r.status===403&&['team_limit','week_limit','plan_required'].includes(j.code)) setTimeout(()=>window.dispatchEvent(new CustomEvent('tls:limit',{detail:j})),0);
+    throw e}
   return j;
 }
 function cacheSet(k,v){try{localStorage.setItem('tls:'+k,JSON.stringify(v))}catch(e){}}
@@ -56,7 +58,7 @@ function showAuth(cfg={},ctx={}){
       <div class="pw2" hidden><label class="fl" for="auPw2">Repeat new password</label><input id="auPw2" class="inp" type="password" autocomplete="new-password" minlength="8"></div>
       <div class="su" hidden><label class="fl" for="auTeam">First team name</label><input id="auTeam" class="inp" maxlength="60" placeholder="e.g. Riverside FC U18"></div>
       ${cfg.signupCodeRequired&&!ctx.invite?`<div class="su" hidden><label class="fl" for="auCode">Invite code</label><input id="auCode" class="inp" autocomplete="off" maxlength="60"><p class="hint">Touchline Studio is invite-only while we test it.</p></div>`:''}
-      <div class="su" hidden><label class="check agree"><input type="checkbox" id="auAgree"><span>I’m 18 or over and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of use</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</span></label></div>
+      <div class="su" hidden><label class="check agree"><input type="checkbox" id="auAgree"><span>I’m 18 or over and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms and conditions</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>.</span></label></div>
       <button class="btn authgo" id="auGo" type="submit">Log in</button>
       <p class="status" id="auMsg" aria-live="polite"></p>
     </form>
@@ -118,14 +120,14 @@ async function startApp(){
     if(pend){try{localStorage.removeItem('tls:pendingInvite')}catch(e){} try{const r=await api('POST','/api/invites/accept',{token:pend}); joined=r; boot.teams=(await api('GET','/api/teams')).teams}catch(e){setTimeout(()=>toast(e.message),800)}}
     if(invTok) history.replaceState(null,'',appPath()+'#week')}
   if(srv){
-    SRV.on=true; SRV.user=boot.user; SRV.teams=boot.teams||[]; SRV.limit=boot.teamLimit; SRV.beta=!!boot.beta; SRV.termsVersion=boot.termsVersion||null; SRV.env=boot.env||'production';
+    SRV.on=true; SRV.user=boot.user; SRV.teams=boot.teams||[]; SRV.limit=boot.teamLimit; SRV.beta=!!boot.beta; SRV.plan=boot.plan||null; SRV.termsVersion=boot.termsVersion||null; SRV.env=boot.env||'production';
     SYNC_KEYS.forEach(k=>cacheSet(k,(boot.store||{})[k]||[]));
     const act=activeTeams(); let want=null; try{want=JSON.parse(localStorage.getItem('tls:tid'))}catch(e){}
     SRV.tid=(joined&&act.find(t=>t.id===joined.teamId)||act.find(t=>t.id===want)||act[0]||{}).id||null;
     if(SRV.tid){try{await loadTeamData(SRV.tid)}catch(e){cacheSet('weekdraft',null)}} else cacheSet('weekdraft',null);
     document.body.classList.add('cloud');
   }
-  bootApp(); updateTeamBtn(); if(SRV.on&&typeof initSafety==='function') initSafety();
+  bootApp(); updateTeamBtn(); if(SRV.on&&typeof initSafety==='function') initSafety(); if(SRV.on&&typeof initBilling==='function') initBilling();
   if(joined){show('week'); setTimeout(()=>toast(`You’re now a coach for ${joined.team}`),300)}
 }
 function showMissingWeek(){

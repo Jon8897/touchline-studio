@@ -61,6 +61,8 @@ jobs:
       - name: Deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_MODE: ${{ vars.DEPLOY_MODE }}
         run: bash scripts/deploy.sh staging dist/touchline-*.tar.gz
       - name: Smoke test
         env:
@@ -95,6 +97,8 @@ jobs:
       - name: Deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_MODE: ${{ vars.DEPLOY_MODE }}
         run: bash scripts/deploy.sh production dist/touchline-*.tar.gz
       - name: Smoke test
         run: bash scripts/smoke.sh "${{ vars.PRODUCTION_URL }}" "${GITHUB_SHA::7}"

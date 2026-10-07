@@ -1,11 +1,9 @@
 # Running the service
 
-All admin commands run on the server, inside the live release:
+All admin commands run on the server:
 ```bash
-cd /srv/touchline/production/current
-sudo -u touchline node --no-warnings admin.js <command>
+touchline-docker admin production <command>      # or: staging
 ```
-(Use `/srv/touchline/staging/current` for the staging site.)
 
 | Command | What it does |
 |---|---|
@@ -21,6 +19,10 @@ sudo -u touchline node --no-warnings admin.js <command>
 | `set-teams <email> <n>` | Change one coach's team limit |
 | `inactive [months]` | Coaches who haven't logged in for 24+ months (for the retention promise) |
 | `backup` | Make a backup now |
+| `billing <email>` | A coach's plan, Stripe status, renewal and trial dates |
+| `comp <email> [months] [teams]` | Free access for demo or partner accounts (`0` months removes it) |
+| `founders [--mark-all]` | List founding coaches, or mark everyone so far |
+| `stripe-setup` | Create Stripe products, prices, coupon, billing page and webhook |
 | `test-email <address>` | Check email settings |
 
 ## Routines
@@ -29,7 +31,7 @@ sudo -u touchline node --no-warnings admin.js <command>
 
 **Weekly**: copy the latest backup off the server:
 ```bash
-scp you@VPS:/srv/touchline/production/shared/backups/touchline-$(date +%F).db .
+scp kcadmin@77.68.125.195:/opt/apps/touchline/live/backups/touchline-$(date +%F).db .
 ```
 
 **Monthly**: check for system updates (`sudo apt update && sudo apt upgrade`); security updates install automatically.
@@ -38,15 +40,17 @@ scp you@VPS:/srv/touchline/production/shared/backups/touchline-$(date +%F).db .
 
 ## Restoring a backup
 ```bash
-sudo systemctl stop touchline@production
-cd /srv/touchline/production/shared
-sudo -u touchline cp data/touchline.db data/touchline.db.before-restore
-sudo -u touchline cp backups/touchline-2026-11-01.db data/touchline.db
-sudo rm -f data/touchline.db-wal data/touchline.db-shm
-sudo systemctl start touchline@production
+cd /opt/apps/touchline
+docker compose stop touchline-live
+sudo cp live/data/touchline.db live/data/touchline.db.before-restore
+sudo cp live/backups/touchline-2026-11-01.db live/data/touchline.db
+sudo rm -f live/data/touchline.db-wal live/data/touchline.db-shm
+sudo chown 1000:1000 live/data/touchline.db
+docker compose start touchline-live
 ```
 
 ## If something goes wrong
-- **Site down**: `sudo systemctl status touchline@production`, `sudo journalctl -u touchline@production -n 100`, then `sudo touchline-release rollback production` if a release caused it.
+- **Site down**: `touchline-docker status`, `docker logs --tail 100 touchline-live`, then `touchline-docker rollback production` if a release caused it.
+- **Payments look wrong**: `touchline-docker admin production billing their@email`; in Stripe, **Developers → Webhooks** shows every event and whether it was delivered. Failed deliveries are retried automatically.
 - **Data breach** (someone may have got at personal data): follow the breach steps in the Launch pack. You have **72 hours** to report it to the Information Commission if it's a risk to people.
-- **Lost the staging password**: create a new one with `caddy hash-password` and replace the hash in `/etc/caddy/Caddyfile`, then `sudo systemctl reload caddy`.
+- **Lost the beta password**: run `openssl passwd -apr1 NEWPASSWORD`, put `BETA_AUTH='tester:<the result>'` in `/opt/apps/touchline/.env`, then `cd /opt/apps/touchline && docker compose up -d touchline-beta`.

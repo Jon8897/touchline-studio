@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Touchline Studio on Docker + Traefik. Installed as /usr/local/bin/touchline-docker by setup-docker-host.sh.
+#
+#   touchline-docker deploy   <staging|production> <touchline-<version>.tar.gz>   build, switch, health check, roll back on failure
+#   touchline-docker rollback <staging|production>                                go back to the previous release
+#   touchline-docker status                                                       what's running
+#   touchline-docker admin    <staging|production> <admin command…>               e.g. admin production users
+#   touchline-docker backup   <staging|production>                               backup now
+#   touchline-docker restart  <staging|production>                               restart after changing live.env / beta.env
+#   touchline-docker ssh-gate                                                     used by the pipeline's SSH key (see setup)
+set -euo pipefail
+APP="${TOUCHLINE_DIR:-/opt/apps/touchline}"
+START="$PWD"
+cd "$APP"
+svc() { case "$1" in production) echo touchline-live;; staging) echo touchline-beta;; *) echo "Environment must be 'staging' or 'production'" >&2; exit 2;; esac; }
+var() { case "$1" in production) echo LIVE_IMAGE;; staging) echo BETA_IMAGE;; esac; }
+getv() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
+setv() { if grep -qE "^$1=" .env; then sed -i "s#^$1=.*#$1=$2#" .env; else echo "$1=$2" >> .env; fi; }
+compose() { docker compose -f "$APP/docker-compose.yml" --env-file "$APP/.env" "$@"; }
+health() { # $1 container, $2 wanted version ("" = any)
+  local body
+  for _ in $(seq 1 30); do
+    body=$(docker exec "$1" wget -qO- http://127.0.0.1:3000/healthz 2>/dev/null || true)
+    if [[ "$body" == *'"ok":true'* ]] && { [[ -z "$2" ]] || [[ "$body" == *"\"version\":\"$2\""* ]]; }; then echo "$body"; return 0; fi
+    sleep 1
+  done; return 1
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+deploy)
+  ENV="${1:?staging or production}"; TAR="${2:?release file}"; S=$(svc "$ENV"); V=$(var "$ENV")
+  [[ "$TAR" == /* ]] || TAR="$START/$TAR"
+  [[ -f "$TAR" ]] || { echo "Release file not found: $TAR"; exit 2; }
+  TMP=$(mktemp -d); tar -xzf "$TAR" -C "$TMP"
+  VER=$(tr -cd 'a-zA-Z0-9._-' < "$TMP/touchline/VERSION"); [[ -n "$VER" ]] || { echo "No VERSION in release"; exit 2; }
+  mkdir -p releases; rm -rf "releases/$VER"; mv "$TMP/touchline" "releases/$VER"; rm -rf "$TMP"
+  echo "==> Building image touchline:$VER"
+  docker build -q -f "releases/$VER/deploy/docker/Dockerfile" -t "touchline:$VER" "releases/$VER" >/dev/null
+  PREV=$(getv "$V")
+  if docker ps --format '{{.Names}}' | grep -qx "$S"; then
+    echo "==> Backing up the $ENV database"
+    docker exec "$S" node --no-warnings=ExperimentalWarning admin.js backup "/app/backups/pre-deploy-$(date -u +%Y%m%d-%H%M%S).db" >/dev/null || echo "   (backup skipped: no database yet)"
+    find "$( [[ $ENV == production ]] && echo live || echo beta )/backups" -name 'pre-deploy-*.db' -mtime +14 -delete 2>/dev/null || true
+  fi
+  echo "==> Switching $ENV ($S) to $VER"
+  setv "$V" "touchline:$VER"; compose up -d --no-deps "$S" >/dev/null
+  if health "$S" "$VER"; then
+    echo "==> $ENV is live on $VER"
+    # keep the 5 newest releases and their images (plus whatever is running)
+    inuse="$(getv LIVE_IMAGE) $(getv BETA_IMAGE)"
+    for r in $(ls -1t releases | tail -n +6); do [[ " $inuse " == *" touchline:$r "* ]] || { rm -rf "releases/$r"; docker rmi "touchline:$r" >/dev/null 2>&1 || true; }; done
+    exit 0
+  fi
+  echo "!! Health check failed. Rolling back." >&2; docker logs --tail 30 "$S" >&2 || true
+  if [[ -n "$PREV" && "$PREV" != "touchline:none" ]]; then setv "$V" "$PREV"; compose up -d --no-deps "$S" >/dev/null; health "$S" "" >/dev/null && echo "Rolled back to $PREV" >&2
+  else echo "There was no earlier release to go back to. Fix the problem and deploy again." >&2; fi
+  # forget the failed release so a later rollback never picks it
+  if [[ " $(getv LIVE_IMAGE) $(getv BETA_IMAGE) " != *" touchline:$VER "* ]]; then rm -rf "releases/$VER"; docker rmi "touchline:$VER" >/dev/null 2>&1 || true; fi
+  exit 1;;
+rollback)
+  ENV="${1:?staging or production}"; S=$(svc "$ENV"); V=$(var "$ENV"); CUR=$(getv "$V"); CUR=${CUR#touchline:}
+  # release folder names are plain version strings
+  PREV=""; seen=""
+  # the release deployed just before the live one (newest first); folder names are plain version strings
+  # shellcheck disable=SC2045
+  for r in $(ls -1t releases); do if [[ -n "$seen" ]]; then PREV="$r"; break; fi; [[ "$r" == "$CUR" ]] && seen=1; done
+  [[ -n "$PREV" ]] && docker image inspect "touchline:$PREV" >/dev/null 2>&1 || { echo "No earlier release to go back to."; exit 1; }
+  setv "$V" "touchline:$PREV"; compose up -d --no-deps "$S" >/dev/null; health "$S" "$PREV" && echo "Rolled $ENV back to $PREV";;
+status)
+  for e in production staging; do S=$(svc $e); printf '%-11s %-15s %s\n' "$e" "$(getv "$(var $e)")" "$(docker exec "$S" wget -qO- http://127.0.0.1:3000/healthz 2>/dev/null || echo 'not running')"; done
+  echo "Releases: $(ls -1t releases 2>/dev/null | tr '\n' ' ')";;
+admin)
+  ENV="${1:?staging or production}"; shift; docker exec -i "$(svc "$ENV")" node --no-warnings=ExperimentalWarning admin.js "$@";;
+restart)
+  ENV="${1:?staging or production}"; S=$(svc "$ENV"); compose up -d --no-deps --force-recreate "$S" >/dev/null; health "$S" "" && echo "$ENV restarted with the new settings";;
+backup)
+  ENV="${1:?staging or production}"; docker exec "$(svc "$ENV")" node --no-warnings=ExperimentalWarning admin.js backup;;
+ssh-gate)
+  # The pipeline's key can only do this: "deploy <env>" with the release on stdin, "status", or "rollback <env>".
+  read -r -a A <<< "${SSH_ORIGINAL_COMMAND:-}"
+  case "${A[0]:-}" in
+    deploy) ENV="${A[1]:-}"; svc "$ENV" >/dev/null; mkdir -p "$APP/incoming"; F="$APP/incoming/release-$$.tar.gz"
+            head -c 104857600 > "$F"; trap 'rm -f "$F"' EXIT; "$0" deploy "$ENV" "$F";;
+    status) "$0" status;;
+    rollback) "$0" rollback "${A[1]:-}";;
+    *) echo "Not allowed: ${A[0]:-nothing}" >&2; exit 1;;
+  esac;;
+*) sed -n '2,11p' "$0"; exit 2;;
+esac

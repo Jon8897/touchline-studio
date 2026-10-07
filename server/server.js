@@ -6,6 +6,7 @@ process.on('warning',w=>{if(w.name!=='ExperimentalWarning') console.warn(w)});
 const http=require('node:http'), fs=require('node:fs'), path=require('node:path');
 const {CFG,db,now,rid,slug,sha,hashPassword,verifyPassword,validEmail}=require('./lib');
 const {Mail}=require('./mailer');
+const Billing=require('./billing');
 
 const PUB=path.join(__dirname,'public');
 const fileCache=new Map();
@@ -83,6 +84,7 @@ function send(res,code,body,headers={}){
   res.end(data);
 }
 const fail=(res,code,error,extra={})=>send(res,code,{error,...extra});
+function readRaw(req,max=MAX_BODY){return new Promise((resolve,reject)=>{let size=0; const chunks=[]; req.on('data',c=>{size+=c.length; if(size>max){reject(Object.assign(new Error('too_large'),{code:413})); req.destroy(); return} chunks.push(c)}); req.on('end',()=>resolve(Buffer.concat(chunks))); req.on('error',reject)})}
 function readBody(req){return new Promise((resolve,reject)=>{let size=0; const chunks=[];
   req.on('data',c=>{size+=c.length; if(size>MAX_BODY){reject(Object.assign(new Error('too_large'),{code:413})); req.destroy(); return} chunks.push(c)});
   req.on('end',()=>{if(!chunks.length) return resolve({}); try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))}catch(e){reject(Object.assign(new Error('bad_json'),{code:400}))}});
@@ -139,7 +141,8 @@ route('GET','/api/me',(req,res,{user})=>send(res,200,{user:publicUser(user),team
 
 route('GET','/api/bootstrap',(req,res,{user})=>{
   const store={}; for(const r of Q.getStore.all(user.id)) try{store[r.key]=JSON.parse(r.data)}catch(e){}
-  send(res,200,{user:publicUser(user),teams:Q.teams.all(user.id,user.id).map(t=>publicTeam(t,user.id)),store,teamLimit:user.max_teams,beta:CFG.beta,env:CFG.env,termsVersion:CFG.termsVersion});
+  const ent=Billing.entitlements(user);
+  send(res,200,{user:publicUser(user),teams:Q.teams.all(user.id,user.id).map(t=>publicTeam(t,user.id)),store,teamLimit:ent.teams,plan:{plan:ent.plan,label:ent.label,paid:ent.paid,pastDue:!!ent.pastDue,payments:ent.payments,assistants:ent.assistants,weeksPerTeam:Number.isFinite(ent.weeksPerTeam)?ent.weeksPerTeam:null},beta:CFG.beta,env:CFG.env,termsVersion:CFG.termsVersion});
 });
 
 route('PUT','/api/store/:key',(req,res,{user,params,body})=>{
@@ -174,9 +177,13 @@ route('GET','/api/account/export',(req,res,{user})=>{
   send(res,200,JSON.stringify(out,null,2),{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="touchline-data-${new Date().toISOString().slice(0,10)}.json"`});
 });
 route('POST','/api/account/terms',(req,res,{user,body})=>{if(body.agree!==true) return fail(res,400,'Please tick the box to agree.'); db.prepare('UPDATE users SET terms_accepted_at=?, terms_version=? WHERE id=?').run(now(),CFG.termsVersion,user.id); send(res,200,{ok:true})});
-route('POST','/api/account/delete',(req,res,{user,body})=>{
+route('POST','/api/account/delete',async(req,res,{user,body})=>{
   if(limited('del:'+user.id,5,3600e3)) return fail(res,429,'Too many attempts. Try again later.');
   if(!verifyPassword(String(body.password||''),user.pass)) return fail(res,403,'That password isn’t right.');
+  if(user.billing_subscription&&['active','trialing','past_due','unpaid','incomplete'].includes(user.billing_status)){
+    try{await Billing.stripe('DELETE',`/v1/subscriptions/${encodeURIComponent(user.billing_subscription)}`)}   // stop future payments straight away
+    catch(e){return fail(res,502,'We couldn’t cancel your subscription with Stripe, so nothing was deleted. Try again in a minute.')}
+  }
   db.prepare('DELETE FROM reports WHERE user_id=?').run(user.id);
   db.prepare('DELETE FROM users WHERE id=?').run(user.id);   // teams, weeks, drafts, sessions and library go with it (ON DELETE CASCADE)
   setCookie(res,'',0); Mail.deleted(user.email,user.name); send(res,200,{ok:true});
@@ -196,6 +203,8 @@ route('POST','/api/report',(req,res,{user,body})=>{
   if(info.email) Mail.reportAck(info.email,info);
   send(res,201,{ok:true,id:r.id});
 },{public:true});
+
+Billing.install({route,send,fail,Mail,limited});
 
 /* password reset */
 route('POST','/api/password/forgot',(req,res,{body})=>{
@@ -241,6 +250,7 @@ route('POST','/api/teams/:id/invites',(req,res,{user,params,body})=>{
   if(limited('invite:'+user.id,30,3600e3)) return fail(res,429,'Too many invites. Try again later.');
   const email=clean(body.email,200).toLowerCase(); if(!validEmail(email)) return fail(res,400,'Enter a valid email address.');
   if(email===user.email.toLowerCase()) return fail(res,400,'That’s your own email.');
+  if(!Billing.entitlements(user).assistants) return fail(res,403,'Assistant coaches are part of the Coach and Club plans.',{code:'plan_required'});
   const existing=Q.userByEmail.get(email); if(existing&&Q.member.get(t.id,existing.id)) return fail(res,409,'They’re already a coach on this team.');
   if(Q.memberCount.get(t.id).n+Q.invites.all(t.id,now()).length>=CFG.maxAssistants) return fail(res,403,`A team can have up to ${CFG.maxAssistants} assistant coaches.`);
   for(const p of Q.pendingFor.all(t.id,email,now())) Q.delInvite.run(p.id,t.id);
@@ -253,11 +263,11 @@ route('DELETE','/api/teams/:id/members/:uid',(req,res,{user,params})=>{const t=c
 route('POST','/api/teams/:id/leave',(req,res,{user,params})=>{const t=canTeam(user,params.id); if(!t) return fail(res,404,'Team not found'); if(t.owner_id===user.id) return fail(res,400,'You run this team. Archive it instead.'); Q.delMember.run(t.id,user.id); send(res,200,{ok:true})});
 
 /* teams */
-route('GET','/api/teams',(req,res,{user})=>send(res,200,{teams:Q.teams.all(user.id,user.id).map(t=>publicTeam(t,user.id)),limit:user.max_teams}));
+route('GET','/api/teams',(req,res,{user})=>send(res,200,{teams:Q.teams.all(user.id,user.id).map(t=>publicTeam(t,user.id)),limit:Billing.entitlements(user).teams}));
 route('POST','/api/teams',(req,res,{user,body})=>{
   const name=clean(body.name,60); if(!name) return fail(res,400,'Give the team a name.');
-  const n=Q.activeCount.get(user.id).n;
-  if(n>=user.max_teams) return fail(res,403,`Your plan includes ${user.max_teams} active team${user.max_teams>1?'s':''}. Archive a team or upgrade to add another.`,{code:'team_limit',limit:user.max_teams});
+  const n=Q.activeCount.get(user.id).n, E=Billing.entitlements(user);
+  if(n>=E.teams) return fail(res,403,E.plan==='free'?'The Free plan includes 1 team. Upgrade to Coach to add more teams.':E.plan==='coach'?`Your plan includes ${E.teams} active team${E.teams>1?'s':''}. Add an extra team under Plan & billing, or archive one.`:`Your plan includes ${E.teams} active teams. Archive a team to add another.`,{code:'team_limit',limit:E.teams});
   const id=rid(), color=COLOR.test(body.color||'')?body.color:'#e7b53c';
   Q.insTeam.run(id,user.id,name,color,now(),now()); send(res,201,{team:publicTeam(Q.team.get(id),user.id)});
 });
@@ -270,7 +280,7 @@ route('PATCH','/api/teams/:id',(req,res,{user,params,body})=>{
 route('POST','/api/teams/:id/archive',(req,res,{user,params})=>{const t=canTeam(user,params.id); if(!t||t.owner_id!==user.id) return fail(res,404,'Team not found'); Q.archTeam.run(1,now(),t.id); send(res,200,{ok:true})});
 route('POST','/api/teams/:id/restore',(req,res,{user,params})=>{
   const t=canTeam(user,params.id); if(!t||t.owner_id!==user.id) return fail(res,404,'Team not found');
-  if(Q.activeCount.get(user.id).n>=user.max_teams) return fail(res,403,`You already have ${user.max_teams} active teams. Archive one first or upgrade.`,{code:'team_limit',limit:user.max_teams});
+  {const E=Billing.entitlements(user); if(Q.activeCount.get(user.id).n>=E.teams) return fail(res,403,`You already have ${E.teams} active team${E.teams>1?'s':''}. Archive one first or upgrade.`,{code:'team_limit',limit:E.teams})}
   Q.archTeam.run(0,now(),t.id); send(res,200,{ok:true});
 });
 route('GET','/api/teams/:id/draft',(req,res,{user,params})=>{const t=canTeam(user,params.id); if(!t) return fail(res,404,'Team not found'); const r=Q.getDraft.get(t.id); send(res,200,{value:r?JSON.parse(r.data):null})});
@@ -283,6 +293,8 @@ route('POST','/api/teams/:id/weeks',(req,res,{user,params,body})=>{
   const t=canTeam(user,params.id); if(!t) return fail(res,404,'Team not found');
   if(t.archived) return fail(res,403,'Restore this team before publishing.');
   if(!body.data||typeof body.data!=='object') return fail(res,400,'Nothing to publish');
+  {const E=Billing.entitlements(Billing.ownerOf(t.owner_id)); const live=db.prepare('SELECT COUNT(*) n FROM weeks WHERE team_id=?').get(t.id).n;
+   if(live>=E.weeksPerTeam) return fail(res,403,'The Free plan keeps one weekly link live per team. Update the current week, delete it, or upgrade to Coach for unlimited weeks.',{code:'week_limit'})}
   const data={...body.data,team:t.name,posted:now()}; let s; do{s=slug()}while(Q.week.get(s));
   Q.insWeek.run(rid(),s,t.id,clean(data.title||'This week',80),JSON.stringify(data),body.draft?JSON.stringify(body.draft):null,now(),now());
   send(res,201,{slug:s,url:weekUrl(s)});
@@ -314,6 +326,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,'http://x'); const p=url.pathname;
     if(p==='/healthz'){let ok=true; try{db.prepare('SELECT 1').get()}catch(e){ok=false} return send(res,ok?200:503,{ok,version:VERSION,env:CFG.env})}
+    if(p==='/api/webhooks/stripe') return await Billing.handleWebhook(req,res,{send,fail,readRaw,Mail});
     if(p.startsWith('/api/')){
       const r=routes.find(r=>r.method===req.method&&r.re.test(p)); if(!r) return fail(res,404,'Not found');
       if(req.method!=='GET'&&req.headers['x-tls']!=='1') return fail(res,403,'Missing request header');

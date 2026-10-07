@@ -639,6 +639,38 @@ details.danger{margin-top:14px;border-top:1px solid var(--line);padding-top:12px
 .pvlegal{text-align:center;font-size:13px;color:var(--dim);margin:18px 0 0}.pvlegal a{color:var(--muted)}
 .appcredit{text-align:center;font-size:12.5px;color:var(--dim);margin:40px 0 8px}.kcredit{color:var(--muted);text-decoration:none}.kcredit b{color:var(--gold);font-weight:700}.kcredit:hover b{text-decoration:underline}
 body.pmode .appcredit{display:none}
+/* team sheet */
+.sshead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sshead h3{margin:0}
+.sssquad{margin:12px 0 0;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel-2)}
+.sssquad summary{cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.sschips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.sschip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 4px 4px 10px;font-size:14px}
+.sschip b{font-family:var(--f-mono);color:var(--gold);font-size:12px}
+.ssx{border:0;background:none;color:var(--muted);width:24px;height:24px;border-radius:50%;font-size:16px;line-height:1}
+.ssx:hover{background:var(--line);color:var(--fg)}
+.ssadd{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:6px;margin:10px 0 4px}
+.ssgrid{display:grid;gap:16px;margin-top:14px;align-items:start}
+@media(min-width:560px){.ssgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.sspitchwrap{max-width:360px;width:100%;justify-self:center}
+.sspitch{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--line)}
+.sstok{cursor:default}[data-shslot]{cursor:pointer}
+.ssxi{display:grid;gap:5px}
+.ssrow{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:8px;font:700 12px/1 var(--f-mono);color:var(--muted)}
+.ssrest{display:grid;gap:6px}
+.ssr{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:4px 0}
+.ssseg{display:flex;gap:4px}
+.ssseg button{border:1px solid var(--line);background:var(--panel-2);color:var(--muted);border-radius:999px;padding:6px 10px;font:700 12px/1 var(--f-body)}
+.ssseg button[aria-pressed="true"][data-v="sub"]{background:color-mix(in srgb,var(--teal) 20%,var(--panel));border-color:var(--teal);color:var(--teal)}
+.ssseg button[aria-pressed="true"][data-v="out"]{background:color-mix(in srgb,var(--red) 18%,var(--panel));border-color:var(--red);color:var(--red)}
+.pvsheet .sshead{margin-bottom:4px}
+.ssmeet{display:grid;justify-items:end;gap:2px}.ssmeet small{font:700 10px/1 var(--f-display);letter-spacing:.2em;color:var(--muted)}.ssmeet b{font:800 18px/1.1 var(--f-display);color:var(--gold)}
+.sslist{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.sslist li{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:5px 0}
+.sslist small{margin-left:auto;font:700 11px/1 var(--f-mono);color:var(--muted)}
+.ssn{min-width:26px;font:700 13px/1 var(--f-mono);color:var(--gold)}
+.sscap{background:var(--gold);color:var(--gold-ink);border-radius:5px;font:800 10px/1 var(--f-display);padding:3px 5px}
+.sskit{margin:12px 0 0}.sskit small{font:700 10px/1 var(--f-display);letter-spacing:.2em;color:var(--muted);margin-right:6px}
 </style>
 
 <header class="top">

@@ -230,3 +230,13 @@ test('too many wrong logins are slowed down', async () => {
   for (let i = 0; i < 12; i++) last = await c.post('/api/login', { email: 'brute@test.dev', password: 'guess-' + i });
   assert.equal(last.status, 429);
 });
+
+test('team sheet is published with the week and named in the link preview', async () => {
+  const c = client(); await signup(c, 'sheet@test.dev');
+  const tid = (await c.get('/api/teams')).json.teams[0].id;
+  const sheet = { form: '2-3-1 (7-a-side)', size: 7, xi: [{ label: 'GK', x: 50, y: 94, name: 'Mia', num: '1', cap: false }], subs: [{ name: 'Sam', num: '12', cap: false }], meet: '9:15', kit: 'Home', note: '' };
+  const p = await c.post(`/api/teams/${tid}/weeks`, { data: { title: 'Match week', match: { opp: 'Rovers' }, train: [], items: [], sheet } });
+  assert.equal(p.status, 201);
+  assert.deepEqual((await client().get('/api/public/weeks/' + p.json.slug)).json.data.sheet.subs, sheet.subs);
+  assert.match((await client().get('/w/' + p.json.slug)).text, /content="Next match: v Rovers · Team sheet"/);
+});

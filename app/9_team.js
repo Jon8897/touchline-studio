@@ -72,6 +72,7 @@ function renderWeek(){
         </div>
         <label class="fl" for="wkMsg">Message to the players</label><textarea id="wkMsg" data-k="msg" rows="4" placeholder="What we’re working on this week and what I expect from you.">${esc(WK.msg)}</textarea>
       </div>
+      ${typeof sheetCard==='function'?sheetCard():''}
       <div class="card"><h3>Training this week</h3>
         ${WK.train.length?`<ol class="wklist">${WK.train.map((t,i)=>{const tot=t.ses.blocks.reduce((a,b)=>a+b.min,0); return `<li class="wktrain"><div class="wkt-row"><select class="sel sm" data-tday="${i}" aria-label="Day">${DAYS.map(d=>`<option${t.day===d?' selected':''}>${d}</option>`).join('')}</select><input class="inp sm" type="time" data-ttime="${i}" value="${esc(t.time||'')}" aria-label="Start time"><input class="inp sm" data-tplace="${i}" placeholder="Location" value="${esc(t.place||'')}" aria-label="Location"><button class="ibtn" data-tx="${i}" aria-label="Remove">${IB.del}</button></div><p><b>${esc(t.ses.title)}</b> <span class="muted">· ${tot} min · ${t.ses.blocks.filter(b=>b.type!=='warm'&&b.type!=='cool').length} blocks</span></p></li>`}).join('')}</ol>`:'<p class="muted">No training added yet.</p>'}
         <div class="frow"><button class="btn ghost" id="wkAddCur">+ Current session</button>${saved.length?`<select class="sel" id="wkSaved" style="flex:1;min-width:160px"><option value="">+ From saved sessions…</option>${saved.map((s,i)=>`<option value="${i}">${esc(s.title)}</option>`).join('')}</select>`:''}</div>
@@ -109,12 +110,13 @@ function weekPayload(){
   const C=coachCfg();
   const ids=new Set(); WK.train.forEach(t=>t.ses.blocks.forEach(b=>{if(b.id) ids.add(b.id)})); WK.items.forEach(i=>{if(i.t==='drill') ids.add(i.id)});
   const drills=[...ids].map(drillById).filter(d=>d&&d.custom).map(d=>{const o={...d}; delete o.areaKey; return o});
-  return {v:1,team:C.team,coach:C.name,posted:Date.now(),title:WK.title||'This week',match:WK.match,msg:WK.msg,train:WK.train.slice().sort((a,b)=>DAYS.indexOf(a.day)-DAYS.indexOf(b.day)),items:WK.items.filter(i=>i.t!=='drill'||drillById(i.id)),drills};
+  const sheet=typeof sheetPayload==='function'?sheetPayload():null;
+  return {v:1,team:C.team,coach:C.name,posted:Date.now(),title:WK.title||'This week',match:WK.match,msg:WK.msg,...(sheet?{sheet}:{}),train:WK.train.slice().sort((a,b)=>DAYS.indexOf(a.day)-DAYS.indexOf(b.day)),items:WK.items.filter(i=>i.t!=='drill'||drillById(i.id)),drills};
 }
 let qrLoading=null;
 function loadQR(){if(window.qrcode) return Promise.resolve(); if(qrLoading) return qrLoading; qrLoading=new Promise((res,rej)=>{const s=document.createElement('script'); s.src=/^https?:$/.test(location.protocol)&&!/claude|anthropic/.test(location.hostname)?'/vendor/qrcode.js':'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s)}); return qrLoading}
 async function publishWeek(){
-  const p=weekPayload(); if(!p.train.length&&!p.items.length&&!p.msg){toast('Add training, tactics or a message first'); return}
+  const p=weekPayload(); if(!p.train.length&&!p.items.length&&!p.msg&&!p.sheet){toast('Add training, tactics, a team sheet or a message first'); return}
   const out=$('#wkOut'); out.innerHTML='<p class="muted">Creating link…</p>';
   const packed=await packWeek(p); const url=linkBase()+'#w.'+packed;
   const hist=store.get('weeks',[]); hist.unshift({title:p.title,posted:p.posted,url,wk:JSON.parse(JSON.stringify(WK))}); store.set('weeks',hist.slice(0,20));
@@ -145,7 +147,7 @@ function initWeek(){
     if(e.target.closest('#wkPublish')){if(SRV.on) await publishCloud(false); else await publishWeek(); return}
     if(e.target.closest('#wkPublishNew')){await publishCloud(true); return}
     if(SRV.on&&await cloudClick(e)) return;
-    const cl=e.target.closest('#wkClear'); if(cl){if(cl.dataset.sure){WK=blankWeek(); saveDraft(); renderWeek()} else {cl.dataset.sure='1'; cl.textContent='Tap again to clear'; setTimeout(()=>{if(cl.isConnected){delete cl.dataset.sure; cl.textContent='Start a new week'}},3000)} return}
+    const cl=e.target.closest('#wkClear'); if(cl){if(cl.dataset.sure){const keep={squad:WK.squad||[],form:(WK.sheet||{}).form,on:(WK.sheet||{}).on}; WK=blankWeek(); WK.squad=keep.squad; if(keep.form) WK.sheet={...ssBlank(keep.form),on:keep.on!==false}; saveDraft(); renderWeek()} else {cl.dataset.sure='1'; cl.textContent='Tap again to clear'; setTimeout(()=>{if(cl.isConnected){delete cl.dataset.sure; cl.textContent='Start a new week'}},3000)} return}
     if(e.target.closest('#wkAddCur')){if(SES){WK.train.push({day:nextFreeDay(),time:'18:30',place:'',ses:cleanSes(SES)}); saveDraft(); renderWeek()} return}
     if(e.target.closest('#atAdd')){WK.items.push({t:'tac',form:$('#atForm').value,mode:$('#atMode').value,opp:$('#atOpp').value,note:''}); saveDraft(); renderWeek(); return}
     const g=k=>{const x=e.target.closest(`[data-${k}]`); return x?+x.dataset[k]:null}; let i;
@@ -161,6 +163,7 @@ function initWeek(){
     if(e.target.closest('#csSave')){const C=coachCfg(); C.team=$('#csTeam').value.trim()||C.team; C.name=$('#csName').value.trim()||C.name; const np=$('#csPin').value; if(np){if(!/^\d{4,8}$/.test(np)){toast('The PIN must be 4 to 8 digits');return} C.salt=Math.random().toString(36).slice(2,10); C.hash=await hashPin(np,C.salt)} store.set('coach',C); renderWeek(); toast('Settings saved'); return}
   });
   body.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='liPin') $('#liGo').click()});
+  if(typeof initSheet==='function') initSheet();
   body.addEventListener('input',e=>{const t=e.target;
     if(t.dataset.k){WK[t.dataset.k]=t.value; saveDraft(); return}
     if(t.dataset.m){WK.match[t.dataset.m]=t.value; saveDraft(); return}
@@ -209,6 +212,7 @@ async function openPlayer(data){
   <div class="wrap pvwrap">
     <section class="pvhero"><p class="eyebrow">${esc(W.team||'')} · This week</p><h1>${esc(W.title)}</h1><p class="muted">Posted by ${esc(W.coach||'your coach')} · ${new Date(W.posted).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</p></section>
     ${M.opp?`<section class="pvmatch"><p class="eyebrow">Next match</p><div class="pvm"><b>${esc(M.ha==='Away'?'@ ':'v ')}${esc(M.opp)}</b><span class="tag ${M.ha==='Home'?'lo':M.ha==='Away'?'hi':'md'}">${esc(M.ha||'')}</span></div><p>${[fmtDate(M.date),M.time&&('Kick-off '+M.time),M.venue].filter(Boolean).map(esc).join(' · ')}</p></section>`:''}
+    ${W.sheet&&typeof sheetSection==='function'?sheetSection(W.sheet,W):''}
     ${W.msg?`<section class="card pvmsg"><h3>From ${esc(W.coach||'the coach')}</h3><p>${esc(W.msg).replace(/\n/g,'<br>')}</p></section>`:''}
     ${trainHtml?`<div class="sechead"><h2>Training</h2><span class="muted">${W.train.length} session${W.train.length>1?'s':''}</span></div><div class="pvlist">${trainHtml}</div>`:''}
     ${boardItems.length?`<div class="sechead"><h2>Tactics to study</h2><span class="muted">Tap play on each board</span></div><div class="pvtacs">${boardItems.map((it,i)=>`<article class="card pvtac"><p class="eyebrow" style="color:var(--${it.t==='tac'&&modeSide(it.mode)==='def'?'red':'teal'})">${it.t==='tac'?(modeSide(it.mode)==='def'?'Defending':modeSide(it.mode)==='att'?'Attacking':'Full cycle'):'Coach play'}</p><h3 class="pvh">${esc(it.t==='tac'?`${(FORMATIONS.find(f=>f.id===it.form)||{}).name||''} · ${modeLabel(it.mode)}`:it.title)}</h3>${it.note?`<p class="pvnote">${esc(it.note)}</p>`:''}<div class="pvboard" data-pvi="${i}"></div></article>`).join('')}</div>`:''}
@@ -275,7 +279,7 @@ function cloudSettings(){const t=curTeam(), act=activeTeams(), mine=act.filter(x
     </details>
   </div>`}
 async function publishCloud(asNew){
-  const p=weekPayload(); if(!p.train.length&&!p.items.length&&!p.msg){toast('Add training, tactics or a message first'); return}
+  const p=weekPayload(); if(!p.train.length&&!p.items.length&&!p.msg&&!p.sheet){toast('Add training, tactics, a team sheet or a message first'); return}
   const draft=JSON.parse(JSON.stringify(WK)); delete draft._slug;
   try{
     const r=(WK._slug&&!asNew)?await api('PUT','/api/weeks/'+WK._slug,{data:p,draft}):await api('POST',`/api/teams/${SRV.tid}/weeks`,{data:p,draft});

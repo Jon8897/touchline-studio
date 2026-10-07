@@ -42,7 +42,9 @@ const appScript = js(APP_JS);
 /* business details for the legal pages: {{businessName}} etc. Empty ones show as [fill in: ...] and block production */
 const LEGAL = JSON.parse(read(path.join(APP, 'legal-details.json')));
 const label = k => k.replace(/([A-Z])/g, ' $1').toLowerCase();
-const fillDetails = html => html.replace(/mailto:\{\{contactEmail\}\}/g, 'mailto:' + (String(LEGAL.contactEmail || '').trim() || 'hello@touchlinestudio.com')).replace(/\{\{(\w+)\}\}/g, (m, k) => {
+/* <!--if:key-->…<!--/if--> keeps a passage only when that detail is filled in */
+const ifDetails = html => html.replace(/<!--if:(\w+)-->([\s\S]*?)<!--\/if-->/g, (m, k, inner) => (String(LEGAL[k] || '').trim() ? inner : ''));
+const fillDetails = html => ifDetails(html).replace(/mailto:\{\{contactEmail\}\}/g, 'mailto:' + (String(LEGAL.contactEmail || '').trim() || 'hello@touchlinestudio.com')).replace(/\{\{(\w+)\}\}/g, (m, k) => {
   if (!(k in LEGAL)) throw new Error(`Unknown legal detail {{${k}}}`);
   const v = String(LEGAL[k] || '').trim();
   if (v) return v.replace(/&/g, '&amp;').replace(/</g, '&lt;');

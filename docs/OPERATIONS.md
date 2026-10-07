@@ -36,7 +36,7 @@ scp kcadmin@77.68.125.195:/opt/apps/touchline/live/backups/touchline-$(date +%F)
 
 **Monthly**: check for system updates (`sudo apt update && sudo apt upgrade`); security updates install automatically.
 
-**Yearly**: run `admin.js inactive`, email those coaches, and delete accounts that don't reply within 30 days. Review the legal pages, the safeguarding page and the risk assessments in the Launch pack. Renew the data protection fee.
+**Yearly**: run `admin.js inactive`, email those coaches, and delete accounts that don't reply within 30 days. Review the legal pages, the safeguarding page and the risk assessments in the Launch pack. Renew the data protection fee (once you have paid it, put the number in `app/legal-details.json`).
 
 ## Restoring a backup
 ```bash

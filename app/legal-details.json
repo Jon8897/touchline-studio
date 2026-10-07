@@ -14,7 +14,8 @@
   "effectiveDate": "",
   "governingLaw": "England and Wales",
   "_optional": [
-    "companyNumber"
+    "companyNumber",
+    "icoRegistrationNumber"
   ],
   "_examples": {
     "businessName": "Touchline Studio Ltd   (or your own name if you're a sole trader)",
@@ -23,7 +24,7 @@
     "address": "1 High Street, Leeds LS1 1AA   (a registered office or service address is fine)",
     "contactEmail": "hello@touchlinestudio.co.uk",
     "responsiblePerson": "Jonathan Keefe, founder",
-    "icoRegistrationNumber": "ZB123456   (you get this when you pay the data protection fee)",
+    "icoRegistrationNumber": "ZB123456   (optional until you pay the data protection fee; the sentence about it is left out of the Privacy policy while this is empty)",
     "hostingProvider": "Hetzner Online GmbH",
     "hostingLocation": "the United Kingdom",
     "emailProvider": "Resend, Inc.",

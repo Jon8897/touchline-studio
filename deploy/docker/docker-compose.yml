@@ -26,7 +26,8 @@ services:
       - "traefik.http.routers.touchline-http.entrypoints=web"
       - "traefik.http.routers.touchline-http.rule=Host(`${LIVE_HOST}`)"
       - "traefik.http.routers.touchline-http.middlewares=touchline-https"
-      - "traefik.http.middlewares.touchline-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.touchline-beta-http.middlewares=touchline-beta-https"
+      - "traefik.http.middlewares.touchline-beta-https.redirectscheme.scheme=https"
     security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs: ["/tmp"]

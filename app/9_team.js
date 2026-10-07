@@ -245,7 +245,7 @@ function cloudNoTeam(){return `<div class="card authcard"><p class="eyebrow">Wel
   ${SRV.teams.filter(t=>t.archived&&t.owner).map(t=>`<div class="row teamrow"><span class="tdot" style="--c:${t.color}"></span><b>${esc(t.name)}</b><span class="bsp"></span><button class="mini" data-trest="${t.id}">Restore</button></div>`).join('')}
   <div class="frow"><button class="btn ghost" id="acLogout">Log out</button></div></div>`}
 function cloudBar(){const t=curTeam(), act=activeTeams();
-  return `<div class="wkbar"><div><p class="eyebrow">Team week <span class="syncdot" id="syncDot" data-s="saved" title="All changes saved"></span></p><h2>${esc(t.name)}</h2></div><div class="wkbar-btns"><a class="btn ghost" href="/guide" target="_blank" rel="noopener">How to use</a><button class="btn ghost" id="wkPreview">Preview as player</button></div></div>
+  return `${store.get('guideSeen',false)?'':`<div class="guidecard" id="guideCard"><p><b>New to Touchline?</b>The 2-minute guide shows how to plan a week, send drills and team sheets, and share one link with your players.</p><div class="frow"><a class="btn" href="/guide" target="_blank" rel="noopener" data-guidedone>Read the guide</a><button class="btn ghost" data-guidedone>Got it</button></div></div>`}<div class="wkbar"><div><p class="eyebrow">Team week <span class="syncdot" id="syncDot" data-s="saved" title="All changes saved"></span></p><h2>${esc(t.name)}</h2></div><div class="wkbar-btns"><a class="btn ghost" href="/guide" target="_blank" rel="noopener">How to use</a><button class="btn ghost" id="wkPreview">Preview as player</button></div></div>
   <div class="teamsw" role="tablist" aria-label="Your teams">${act.map(x=>`<button role="tab" class="tchip" data-team="${x.id}" aria-selected="${x.id===SRV.tid}" style="--c:${x.color}"><span class="tdot"></span>${esc(x.name)}${x.owner?'':'<small class="asst">Asst</small>'}</button>`).join('')}<button class="tchip add" data-goteams>+ Add team</button></div>`}
 function coachesCard(){const t=curTeam(), M=SRV.members; if(!t||!M) return '';
   const own=M.you==='owner';
@@ -323,3 +323,6 @@ function showInvite(link,email){
   const sh=$('#invShare'); if(sh) sh.onclick=async()=>{try{await navigator.share({title:'Coach invite',text:`Join me as a coach for ${curTeam().name} on Touchline Studio`,url:link})}catch(e){}};
   out.scrollIntoView({behavior:'smooth',block:'center'});
 }
+
+/* first-visit guide card: hide for good once read or dismissed */
+document.addEventListener('click',e=>{const g=e.target.closest('[data-guidedone]'); if(!g) return; store.set('guideSeen',true); const c=document.getElementById('guideCard'); if(c) c.remove()});

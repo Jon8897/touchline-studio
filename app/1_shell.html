@@ -353,6 +353,15 @@ ol.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:24px
 /* team week */
 .topin{gap:10px}
 .teambtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:8px 14px;font:800 13px/1 var(--f-display);letter-spacing:.14em;text-transform:uppercase;margin-left:auto}
+a.btn{text-decoration:none}
+.helpbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:8px 12px;font:800 13px/1 var(--f-display);letter-spacing:.14em;text-transform:uppercase;text-decoration:none;flex:none}
+.helpbtn svg{width:16px;height:16px;fill:var(--gold)}.helpbtn:hover{border-color:var(--gold)}
+@media(max-width:480px){.helpbtn span{display:none}.helpbtn{padding:8px}}
+@media(min-width:1024px){.helpbtn{order:4}}
+body.pmode .helpbtn{display:none}
+.guidecard{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--gold);background:color-mix(in srgb,var(--gold) 10%,var(--panel));border-radius:14px;padding:14px 16px;margin:0 0 16px}
+.guidecard p{margin:0;flex:1 1 260px}.guidecard b{display:block;font:800 17px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+.guidecard .frow{margin:0}
 .teambtn svg{width:16px;height:16px;fill:var(--gold)}
 .teambtn.on{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 14%,var(--panel))}
 @media(min-width:1024px){.teambtn{order:3;margin-left:6px}.nav{margin-left:auto}}
@@ -689,6 +698,7 @@ body.pmode .appcredit{display:none}
       <span><b>TOUCHLINE</b><i>STUDIO</i></span>
     </a>
     <button class="teambtn" id="teamBtn" aria-label="Team week: coach area"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V7a3 3 0 0 0-3-3zm0 9a2 2 0 0 0-1 3.7V19h2v-2.3A2 2 0 0 0 12 13z"/></svg><span>Team week</span></button>
+    <a class="helpbtn" href="/guide" target="_blank" rel="noopener" aria-label="How to use Touchline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-1 11h2v2h-2zm1-9a3.5 3.5 0 0 1 1.4 6.7c-.3.2-.4.4-.4.8V14h-2v-.5c0-1.2.6-2.1 1.6-2.6A1.5 1.5 0 1 0 10.5 9.5h-2A3.5 3.5 0 0 1 12 6z"/></svg><span>Help</span></a>
     <nav class="nav" id="nav" aria-label="Sections">
       <button data-v="formations"><svg viewBox="0 0 24 24"><path d="M4 3h16v18H4zM6 5v6h12V5zm0 8v6h12v-6zM12 8a1.5 1.5 0 1 1 0 .01zM8 16a1.5 1.5 0 1 1 0 .01zm8 0a1.5 1.5 0 1 1 0 .01z"/></svg>Formations</button>
       <button data-v="positions"><svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-7 19c0-4 3-7 7-7s7 3 7 7z"/></svg>Positions</button>

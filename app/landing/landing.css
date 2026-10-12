@@ -142,3 +142,5 @@ ul.tick.big li{font-size:17px;padding-left:26px}
 .lwho{font-size:13px;color:var(--muted);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}.lwho b{color:var(--fg)}
 @media(max-width:600px){.lwho{display:none}}
 .lcta{align-items:center}
+.nf{min-height:50vh}.nf h1{font-size:clamp(64px,14vw,140px)}.nfbtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.legal a.lbtn{color:var(--gold-ink);text-decoration:none}.legal a.lbtn.ghost{color:var(--gold)}

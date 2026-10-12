@@ -5,6 +5,7 @@
    node admin.js set-teams <email> <n>         change how many active teams a coach may have
    node admin.js delete-user <email>           remove a coach and all their data
    node admin.js stats                         totals
+   node admin.js traffic [days]                website visits per day, top pages, where visitors came from
    node admin.js backup [file]                 safe copy of the database
    node admin.js test-email <address>          send a test email to check your email settings
    node admin.js teams <email>                 list a coach's teams and assistants
@@ -43,6 +44,14 @@ switch(cmd){
     if(u.billing_subscription&&['active','trialing','past_due','unpaid','incomplete'].includes(u.billing_status)){
       require('./billing').stripe('DELETE',`/v1/subscriptions/${encodeURIComponent(u.billing_subscription)}`).then(()=>{console.log('Stripe subscription cancelled.'); finish()}).catch(e=>{console.error('Could not cancel their Stripe subscription ('+e.message+'). Nothing deleted.'); process.exit(1)});
     } else finish(); break}
+  case 'traffic':{
+    const days=Math.max(1,+(args[0]||7)), since=new Date(Date.now()-(days-1)*864e5).toISOString().slice(0,10);
+    const W='FROM page_views WHERE day>=?'; const tot=db.prepare('SELECT COALESCE(SUM(n),0) n '+W).get(since).n;
+    console.log(`Website visits, last ${days} day(s): ${tot}  (counted without cookies; bots skipped)\n\nBy day:`);
+    for(const r of db.prepare('SELECT day,SUM(n) n '+W+' GROUP BY day ORDER BY day').all(since)) console.log(`  ${r.day}  ${String(r.n).padStart(6)}`);
+    console.log('\nTop pages:'); for(const r of db.prepare('SELECT path,SUM(n) n '+W+' GROUP BY path ORDER BY n DESC LIMIT 12').all(since)) console.log(`  ${String(r.n).padStart(6)}  ${r.path}`);
+    console.log('\nWhere visitors came from:'); for(const r of db.prepare('SELECT ref,SUM(n) n '+W+' GROUP BY ref ORDER BY n DESC LIMIT 12').all(since)) console.log(`  ${String(r.n).padStart(6)}  ${r.ref||'(typed in, bookmark or app)'}`);
+    const su=db.prepare('SELECT COUNT(*) n FROM users WHERE created>=?').get(Date.parse(since)).n; console.log(`\nNew coach accounts in the same period: ${su}`); break}
   case 'stats':{
     const c=t=>db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n;
     console.log(`Coaches ${c('users')} · Teams ${c('teams')} · Published weeks ${c('weeks')} · Player views ${db.prepare('SELECT COALESCE(SUM(views),0) n FROM weeks').get().n}`); break}

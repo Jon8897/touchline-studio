@@ -100,7 +100,24 @@ function initBilling() {
     history.replaceState(null, '', location.pathname + location.hash);
     if (q === 'done') {
       toast('Thanks! Setting up your plan…'); show('week');
-      let n = 0; const poll = async () => { await refreshPlan(); if ((BILL && BILL.subscription) || ++n > 10) { if (BILL && BILL.subscription) toast('Your plan is active'); return; } setTimeout(poll, 1500); }; poll();
+      let n = 0; const poll = async () => { await refreshPlan(); if ((BILL && BILL.subscription) || ++n > 10) { if (BILL && BILL.subscription) showThanks(BILL); return; } setTimeout(poll, 1500); }; poll();
     } else toast('Checkout cancelled. Nothing was charged.');
   }
+}
+
+/* thank-you after checkout: what they bought, when the trial ends, what to do next */
+function showThanks(B) {
+  const sub = B.subscription || {}; const plan = sub.plan === 'club' ? 'Club' : 'Coach';
+  const d = t => t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  let el = $('#thxSheet'); if (el) el.remove();
+  el = document.createElement('div'); el.className = 'sheet'; el.id = 'thxSheet';
+  el.innerHTML = `<div class="sheet-in pick" role="dialog" aria-modal="true" aria-labelledby="thxH">
+    <div class="sheet-head"><div><p class="eyebrow">Thank you</p><h2 id="thxH">You’re on the ${plan} plan</h2></div><button class="ib" data-thx aria-label="Close">✕</button></div>
+    <div class="sheet-scroll">
+      <p>${sub.status === 'trialing' && sub.trialEnd ? `Your free trial runs until <b>${d(sub.trialEnd)}</b>. You won’t be charged before then, and you can cancel any time in <b>Plan &amp; billing</b>.` : `Your plan is active${sub.periodEnd ? ` and renews on <b>${d(sub.periodEnd)}</b>` : ''}. A receipt is on its way to your email.`}</p>
+      <ul class="thxlist"><li>Unlimited weekly links for every team</li><li>Invite assistant coaches to help plan and publish</li>${sub.extraTeams ? `<li>${sub.extraTeams} extra team${sub.extraTeams === 1 ? '' : 's'} included</li>` : ''}</ul>
+      <div class="frow"><button class="btn" data-thx>Plan this week</button><a class="btn ghost" href="/guide" target="_blank" rel="noopener">How to use Touchline</a></div>
+    </div></div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-thx]')) { el.remove(); show('week'); } });
 }

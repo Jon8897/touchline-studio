@@ -17,12 +17,22 @@ function readPub(name){ // cached read of a file in public/, refreshed when the 
 }
 const indexHtml=()=>readPub('index.html').toString('utf8');
 /* website pages: swap "Log in / Start free" for "Logged in as … / Open my teams" when the visitor has a session */
+/* Website visit counts, without cookies or anything that identifies a person: just the day, the page and the site that
+   linked here (or ?utm_source=). Bots are skipped. See them with:  node admin.js traffic */
+const visitQ=db.prepare('INSERT INTO page_views(day,path,ref,n) VALUES(?,?,?,1) ON CONFLICT(day,path,ref) DO UPDATE SET n=n+1');
+function countVisit(req,p){try{
+  if(req.method!=='GET'||/bot|crawl|spider|slurp|preview|facebookexternalhit|whatsapp|curl|wget|python|headless|monitor|uptime|lighthouse/i.test(req.headers['user-agent']||'')) return;
+  const u=new URL(req.url,CFG.base); let ref=(u.searchParams.get('utm_source')||'').toLowerCase().replace(/[^a-z0-9._-]/g,'').slice(0,40);
+  if(!ref){try{const h=new URL(req.headers.referer||'').hostname.replace(/^www\./,''); if(h&&h!==new URL(CFG.base).hostname) ref=h.slice(0,60)}catch(e){}}
+  visitQ.run(new Date().toISOString().slice(0,10),(p.replace(/\/$/,'')||'/').slice(0,40),ref);
+}catch(e){}}
 const withLogin=(h,req)=>{let u=null; try{u=currentUser(req)}catch(e){} if(!u) return h;
   const e=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   return h.replace(/<div class="lcta">[\s\S]*?<\/div>/,`<div class="lcta"><span class="lwho" title="${e(u.email)}">Logged in as <b>${e(u.name||u.email)}</b></span><a class="lbtn" href="/app#week">Open my teams</a></div>`)};
 const pageHtml=name=>{const b=readPub(name); if(!b) return null; let h=b.toString('utf8').replaceAll('__BASE__',CFG.base); if(CFG.contact) h=h.replaceAll('hello@touchlinestudio.com',CFG.contact); return h};
 const VERSION=(()=>{try{return fs.readFileSync(path.join(__dirname,'VERSION'),'utf8').trim()}catch(e){return 'dev'}})();
-const STATIC_TYPES={'.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
+const SITEMAP=['/','/demo','/guide','/privacy','/terms','/refunds','/acceptable-use','/safeguarding','/cookies'];
+const STATIC_TYPES={'.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.css':'text/css; charset=utf-8','.webmanifest':'application/manifest+json','.js':'text/javascript; charset=utf-8'};
 
 const SESSION_DAYS=30, IDLE_MS=Math.max(1,+(process.env.SESSION_IDLE_HOURS||12))*3600e3, MAX_BODY=3*1024*1024, USER_KEYS=['mydrills','plays','sessions'];
 const COOKIE='tls_sid';
@@ -348,18 +358,21 @@ const server=http.createServer(async(req,res)=>{
     if(req.method!=='GET'&&req.method!=='HEAD') return fail(res,405,'Method not allowed');
     const wm=p.match(/^\/w\/([a-z0-9]{4,12})\/?$/);
     if(wm){const w=Q.week.get(wm[1]); if(w) return weekPage(res,w); return send(res,404,indexHtml().replace('</head>','<script>window.__WEEK_MISSING__=1;</script></head>'))}
-    if(p==='/robots.txt') return send(res,200,CFG.env==='production'?`User-agent: *\nDisallow: /w/\nDisallow: /app\nDisallow: /api/\n`:`User-agent: *\nDisallow: /\n`,{'Content-Type':'text/plain'});
+    if(p==='/robots.txt') return send(res,200,CFG.env==='production'?`User-agent: *\nDisallow: /w/\nDisallow: /app\nDisallow: /api/\n\nSitemap: ${CFG.base}/sitemap.xml\n`:`User-agent: *\nDisallow: /\n`,{'Content-Type':'text/plain'});
+    if(p==='/sitemap.xml') return send(res,200,`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${SITEMAP.map(u=>`  <url><loc>${CFG.base}${u}</loc></url>`).join('\n')}\n</urlset>\n`,{'Content-Type':'application/xml; charset=utf-8','Cache-Control':'public, max-age=3600'});
     // the app itself
     if(p==='/app'||p.startsWith('/app/')) return send(res,200,indexHtml(),{'Cache-Control':'no-cache'});
     if(p==='/demo'||p==='/demo/') return send(res,200,indexHtml().replace('</head>','<script>window.__DEMO__=1;</script></head>').replace(/<title>[^<]*<\/title>/,'<title>Demo · Touchline Studio</title>'),{'Cache-Control':'no-cache'});
     // the public website: front page, privacy, terms (fall back to the app if there is no front page)
+    {const vp=p.length>1?p.replace(/\/$/,''):p; if(SITEMAP.includes(vp)||vp==='/app') countVisit(req,vp);}
     if(p==='/'){const h=pageHtml('landing.html'); return send(res,200,h?withLogin(h,req):indexHtml(),{'Cache-Control':'private, no-cache','Vary':'Cookie'})}
     const pm=p.match(/^\/([a-z][a-z-]{1,30})\/?$/);   // /privacy, /terms, /safeguarding, /cookies ... = public/<name>.html
-    if(pm&&!['index','landing'].includes(pm[1])){const h=pageHtml(pm[1]+'.html'); if(h) return send(res,200,withLogin(h,req),{'Cache-Control':'private, no-cache','Vary':'Cookie'})}
+    if(pm&&!['index','landing','not-found'].includes(pm[1])){const h=pageHtml(pm[1]+'.html'); if(h) return send(res,200,withLogin(h,req),{'Cache-Control':'private, no-cache','Vary':'Cookie'})}
     // static files in public/ (images, favicon)
     const ext=path.extname(p).toLowerCase();
     if(STATIC_TYPES[ext]&&/^\/((fonts|vendor)\/)?[a-z0-9_-][a-z0-9._-]*$/i.test(p)){const b=readPub(p.slice(1)); if(b) return send(res,200,b,{'Content-Type':STATIC_TYPES[ext],'Cache-Control':ext==='.woff2'?'public, max-age=31536000, immutable':'public, max-age=86400'})}
     // old-style links (/#reset..., /#invite...) arrive as "/" and are handled by the front page script
+    {const nf=pageHtml('not-found.html'); if(nf) return send(res,404,withLogin(nf,req),{'Cache-Control':'no-cache'})}
     return send(res,404,`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not found</title><body style="background:#0b0f0e;color:#eef2ee;font:16px system-ui;display:grid;place-items:center;min-height:90vh;text-align:center"><div><h1>Page not found</h1><p><a style="color:#e7b53c" href="/">Go to the home page</a> or <a style="color:#e7b53c" href="/app">open the coach app</a>.</p></div>`,{'Content-Type':'text/html; charset=utf-8'});
   }catch(err){
     if(err&&err.code===413) return fail(res,413,'That’s too big to save.');

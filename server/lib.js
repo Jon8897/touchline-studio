@@ -51,6 +51,7 @@ CREATE INDEX IF NOT EXISTS weeks_team ON weeks(team_id, published DESC);
 CREATE TABLE IF NOT EXISTS password_resets(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created INTEGER NOT NULL, expires INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS team_invites(id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE, email TEXT NOT NULL COLLATE NOCASE, invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created INTEGER NOT NULL, expires INTEGER NOT NULL, accepted_by TEXT, accepted INTEGER);
 CREATE INDEX IF NOT EXISTS teams_owner ON teams(owner_id);
+CREATE TABLE IF NOT EXISTS page_views(day TEXT NOT NULL, path TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day,path,ref));
 CREATE TABLE IF NOT EXISTS reports(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, message TEXT NOT NULL, page TEXT, email TEXT, user_id TEXT, created INTEGER NOT NULL, done INTEGER);
 `);
 /* small migrations for databases made by earlier versions */

@@ -9,6 +9,7 @@ touchline-docker admin production <command>      # or: staging
 |---|---|
 | `users` | List coaches, their teams and last login |
 | `stats` | Totals: coaches, teams, published weeks, player views |
+| `traffic [days]` | Website visits per day, top pages, and where visitors came from (Facebook, LinkedIn…). No cookies |
 | `teams <email>` | A coach's teams and assistants |
 | `reports` / `reports all` | Open feedback, concerns and privacy requests, with how many days old (reply within 30) |
 | `report-done <id>` | Mark a report as dealt with |

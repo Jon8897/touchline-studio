@@ -256,3 +256,18 @@ test('login: "keep me logged in" sets a 30-day cookie, otherwise a browser-sessi
   r = await b.get('/api/me'); assert.equal(r.status, 200);
   await b.post('/api/logout'); r = await b.get('/'); assert.doesNotMatch(r.text, /Logged in as/);
 });
+
+test('website basics: branded 404, sitemap, robots, per-page descriptions, icons, cookieless visit counts', async () => {
+  const c = client();
+  let r = await c.get('/no-such-page'); assert.equal(r.status, 404); assert.match(r.text, /Offside/); assert.match(r.text, /noindex/);
+  r = await c.get('/not-found'); assert.equal(r.status, 404);
+  r = await c.get('/sitemap.xml'); assert.equal(r.status, 200); assert.match(r.text, /<loc>http[^<]+\/guide<\/loc>/);
+  r = await c.get('/privacy'); assert.match(r.text, /<meta name="description" content="What personal information/); assert.match(r.text, /og:image/); assert.match(r.text, /rel="canonical"/);
+  r = await c.get('/'); assert.match(r.text, /apple-touch-icon/); assert.match(r.text, /site\.webmanifest/);
+  for (const f of ['/favicon.ico', '/apple-touch-icon.png', '/icon-512.png', '/site.webmanifest']) { r = await c.get(f); assert.equal(r.status, 200, f); }
+  await c.raw('GET', '/guide?utm_source=facebook'); await c.raw('GET', '/', null, { Referer: 'https://www.linkedin.com/feed/' });
+  await c.raw('GET', '/', null, { 'User-Agent': 'facebookexternalhit/1.1' });
+  const { spawnSync } = await import('node:child_process');
+  const out = spawnSync(process.execPath, ['--no-warnings', 'admin.js', 'traffic', '1'], { cwd: PKG, env: { ...process.env, DB_PATH: path.join(tmp, 'test.db') }, encoding: 'utf8' }).stdout;
+  assert.match(out, /facebook/); assert.match(out, /linkedin\.com/); assert.match(out, /\/guide/);
+});

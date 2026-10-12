@@ -61,7 +61,10 @@ const doc = ({ title, meta = '', head, body, bodyClass = '' }) => `<!doctype htm
 <meta name="theme-color" content="#0b0f0e">
 <meta name="app-version" content="${version}">
 <meta name="author" content="KeefeCodes (https://keefecodes.com/)">
-<link rel="icon" href="${FAV}">
+<link rel="icon" href="${FAV}" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 ${meta}
 <style>${BASE_CSS}</style>
 ${head}
@@ -81,8 +84,9 @@ const appHtml = doc({
 });
 
 /* ---------- 2. the front page (/) ---------- */
-const DESC = 'Animated football tactics, 100 drills, a session planner and one weekly link for your players. Built for grassroots coaches. Free while in beta.';
+const DESC = 'Animated football tactics, 100 drills, a session planner and one weekly link for your players. Built for grassroots coaches. Free plan, no card needed.';
 const landingMeta = `<meta name="description" content="${DESC}">
+<link rel="canonical" href="__BASE__/">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Touchline Studio">
 <meta property="og:title" content="Touchline Studio · Plan the week. Show the players.">
 <meta property="og:description" content="${DESC}">
@@ -98,12 +102,30 @@ const landingHtml = doc({
 /* ---------- 3. legal and info pages (/privacy, /terms, /safeguarding, ...) ---------- */
 const nav = landingBody.slice(0, landingBody.indexOf('<main>')).replace(/href="#(demo|features|how|pricing|faq)"/g, 'href="/#$1"');
 const foot = landingBody.slice(landingBody.indexOf('<footer'));
-const PAGE_TITLES = { guide: 'How to use Touchline', refunds: 'Refund and cancellation policy', privacy: 'Privacy policy', terms: 'Terms and conditions', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
+const PAGE_DESC = {
+  guide: 'How to use Touchline Studio: plan a week, send drills and team sheets, and share one link with your players.',
+  privacy: 'What personal information Touchline Studio holds, why, how long we keep it and your rights.',
+  terms: 'The terms for using Touchline Studio, including plans, payments and cancelling.',
+  refunds: 'How to cancel a Touchline Studio plan, the free trial and your 14-day right to cancel.',
+  'acceptable-use': 'What you can and can’t post on Touchline Studio, especially about players under 18.',
+  safeguarding: 'How Touchline Studio keeps young players safe, and how to report a concern.',
+  cookies: 'Touchline Studio uses one essential cookie to keep coaches logged in, and nothing for tracking.',
+  'not-found': 'This page doesn’t exist.',
+};
+const pageMeta = (name, title) => { const d = (PAGE_DESC[name] || DESC).replace(/"/g, '&quot;'); const url = `__BASE__/${name}`;
+  return name === 'not-found' ? `<meta name="robots" content="noindex">` : `<meta name="description" content="${d}">
+<link rel="canonical" href="${url}">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Touchline Studio">
+<meta property="og:title" content="${title}"><meta property="og:description" content="${d}">
+<meta property="og:image" content="__BASE__/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:url" content="${url}"><meta name="twitter:card" content="summary_large_image">`; };
+const PAGE_TITLES = { 'not-found': 'Page not found', guide: 'How to use Touchline', refunds: 'Refund and cancellation policy', privacy: 'Privacy policy', terms: 'Terms and conditions', safeguarding: 'Safeguarding', cookies: 'Cookies', 'acceptable-use': 'Acceptable use' };
 const pages = {};
 for (const f of fs.readdirSync(path.join(APP, 'pages')).filter(f => f.endsWith('.html'))) {
   const name = f.replace(/\.html$/, '');
   pages[name] = doc({
     title: `${PAGE_TITLES[name] || name} · Touchline Studio`,
+    meta: pageMeta(name, `${PAGE_TITLES[name] || name} · Touchline Studio`),
     head: `${headNoTitle}\n<style>${landingCss}</style>`,
     bodyClass: 'landing',
     body: `${nav}\n${fillDetails(read(path.join(APP, 'pages', f)))}\n${foot}\n<script>document.getElementById('yr').textContent=new Date().getFullYear()</script>`,

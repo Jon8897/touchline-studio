@@ -166,7 +166,7 @@ function formationScene(F){
   const L=(a,b,t)=>a+(b-a)*t, cl=(v,a,b)=>Math.max(a,Math.min(b,v));
   const mix=(A,B,t,dy)=>A.map((p,i)=>[L(p[0],B[i][0],t),cl(L(p[1],B[i][1],t)+dy,4,92)]);
   const sh=arr=>{const m={};arr.forEach((p,i)=>m[ids[i]]=[p[0],p[1]]);return m};
-  const outf=[1,2,3,4,5,6,7,8,9,10];
+  const outf=F.r.map((_,i)=>i).slice(1);   // every outfield player (10 at 11-a-side, fewer in small-sided games)
   const arg=(arr,score,filt=()=>true)=>outf.filter(i=>filt(arr[i],i)).sort((a,b)=>score(arr[a])-score(arr[b]))[0];
   const dist=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]);
   const base=F.b, ip=F.ip, lb=F.lb;

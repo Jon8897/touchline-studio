@@ -18,7 +18,7 @@ function sceneStates(sc){
 function ballXY(st){const b=st.ball; if(b==null) return null; if(typeof b==='string') return st.pos[b]||null; return b}
 /* Add the missing players of both teams and move them with the ball every step */
 function withContext(sc,o={}){
-  const ours=o.ours!==false, opp=o.opp!==false;
+  const ours=o.ours!==false, opp=o.opp!==false, OS=o.shapes||null;   // shapes: {oppDef,oppAtt,oppR} for small-sided opponents
   sc={...sc,e:{...sc.e},f:sc.f.map(f=>({...f,m:{...(f.m||{})}}))};
   const {S,kind}=sceneStates(sc);
   const ids=Object.keys(sc.e);
@@ -27,8 +27,8 @@ function withContext(sc,o={}){
   const possAt=st=>{const b=st.ball; if(typeof b==='string') return kind(b)==='o'?'o':'u'; return null};
   const ctx=[];
   const add=(side,count)=>{
-    const shape=side==='u'?CTX_SHAPES.ourAtt:CTX_SHAPES.oppDef, R=side==='u'?CTX_SHAPES.ourR:CTX_SHAPES.oppR;
-    let slots=[...Array(11).keys()];
+    const shape=side==='u'?CTX_SHAPES.ourAtt:(OS?OS.oppDef:CTX_SHAPES.oppDef), R=side==='u'?CTX_SHAPES.ourR:(OS?OS.oppR:CTX_SHAPES.oppR);
+    let slots=[...Array(shape.length).keys()];
     const ex=expl(side);
     // remove the slot nearest to each explicit player
     ex.forEach(id=>{const p=S[0].pos[id]||S.find(s=>s.pos[id])?.pos[id]; if(!p||!slots.length) {slots.pop(); return}
@@ -41,7 +41,7 @@ function withContext(sc,o={}){
   if(!ctx.length) return sc;
   const target=(c,b,possSide)=>{
     const att=possSide===c.side;
-    const sh=c.side==='u'?(att?CTX_SHAPES.ourAtt:CTX_SHAPES.ourDef):(att?CTX_SHAPES.oppAtt:CTX_SHAPES.oppDef);
+    const sh=c.side==='u'?(att?CTX_SHAPES.ourAtt:CTX_SHAPES.ourDef):(att?(OS?OS.oppAtt:CTX_SHAPES.oppAtt):(OS?OS.oppDef:CTX_SHAPES.oppDef));
     const p=sh[c.i], gk=c.i===0, kx=gk?.08:.32, ky=gk?.05:.5;
     let x=p[0]+kx*(b[0]-50), y=p[1]+ky*(b[1]-50);
     if(gk) y=c.side==='u'?Math.max(84,Math.min(97,y)):Math.min(16,Math.max(3,y));

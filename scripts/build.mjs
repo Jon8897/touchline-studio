@@ -19,7 +19,7 @@ if (!version) { try { version = execFileSync('git', ['rev-parse', '--short', 'HE
 version = version.slice(0, 12);
 
 /* order matters: later files use what earlier ones define */
-const APP_JS = ['2_engine', '3_formations', '3b_plans', '3c_context', '3d_playbook', '3e_phases', '3f_defvar', '3g_attvar', '4_positions',
+const APP_JS = ['2_engine', '3_formations', '3b_plans', '3c_context', '3d_playbook', '3e_phases', '3f_defvar', '3g_attvar', '3h_small', '4_positions',
   '5_drills', '5b_drills', '5c_drills', '7b_compose', '7_coach', '8_sessions', '8b_drilledit', '9_team', '9b_cloud', '9c_safety', '9d_sheet', '9e_billing', '6_app'];
 const ENGINE_JS = ['2_engine', '3_formations', '3b_plans', '3c_context', '3d_playbook', '3e_phases', '3f_defvar', '3g_attvar'];
 const js = list => list.map(n => read(path.join(APP, n + '.js'))).join('\n');

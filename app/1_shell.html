@@ -264,6 +264,8 @@ ol.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:24px
 /* formation controls v2 */
 .fpick{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x proximity;scroll-padding-inline:16px;scrollbar-width:none;margin:0 -16px 16px;padding:2px 16px 4px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 24px),transparent)}
 .fpick::-webkit-scrollbar{display:none}
+.fsize{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}.fsize button{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:7px 14px;font:800 13px/1 var(--f-display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}.fsize button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.smallnote{margin:8px 2px 0}
 .fgroup{display:grid;gap:6px;flex:none}
 .flab{font:700 11px/1 var(--f-display);letter-spacing:.24em;text-transform:uppercase;color:var(--dim);padding-left:2px}
 .fitems{display:flex;gap:8px}
@@ -721,6 +723,7 @@ body.pmode .appcredit{display:none}
       <h1>Formations in motion</h1>
       <p class="lede">Pick a system, then switch between its attacking shape and its defending shape. Every player on both teams moves. Tap any of your players to study that position.</p>
     </div>
+    <div class="fsize" id="formSize" role="group" aria-label="Team size"></div>
     <div class="fpick" id="formPick" aria-label="Choose a formation"></div>
     <div class="split fsplit">
       <div class="boardcol"><div class="sctabs" id="formModes"></div><div class="boardwrap"><div id="formBoard"></div><div class="frow" style="margin-top:10px"><button class="btn ghost wkadd" data-addweek="tac">+ Add to this week’s post</button></div></div></div>

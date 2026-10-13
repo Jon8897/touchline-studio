@@ -135,12 +135,17 @@ const drillById=id=>DRILLS.find(d=>d.id===id);
 
 /* Formations */
 let curF=FORMATIONS[0];
+const SIZES=[[11,'11-a-side'],[9,'9-a-side'],[7,'7-a-side'],[5,'5-a-side']];
+const fSize=()=>curF.n||11;
 function renderFormPick(){
-  const fams=[...new Set(FORMATIONS.map(f=>f.fam))];
-  $('#formPick').innerHTML=fams.map(fm=>`<div class="fgroup"><span class="flab">${fm}</span><div class="fitems">${FORMATIONS.filter(f=>f.fam===fm).map(f=>`<button class="fcard" data-f="${f.id}" aria-pressed="${f===curF}"><b>${f.name}</b><small>${f.v}</small></button>`).join('')}</div></div>`).join('');
+  const list=fSize()===11?FORMATIONS:SMALL_FORMS.filter(f=>f.n===fSize());
+  const fams=[...new Set(list.map(f=>f.fam))];
+  const sz=$('#formSize'); if(sz) sz.innerHTML=SIZES.map(([n,l])=>`<button data-size="${n}" aria-pressed="${fSize()===n}">${l}</button>`).join('');
+  $('#formPick').innerHTML=fams.map(fm=>`<div class="fgroup"><span class="flab">${fm}</span><div class="fitems">${list.filter(f=>f.fam===fm).map(f=>`<button class="fcard" data-f="${f.id}" aria-pressed="${f===curF}"><b>${f.name}</b><small>${f.v}</small></button>`).join('')}</div></div>`).join('');
   const sel=$('#formPick .fcard[aria-pressed="true"]'); if(sel) keepInView($('#formPick'),sel);
 }
 $('#formPick').addEventListener('click',e=>{const b=e.target.closest('[data-f]'); if(b) setForm(b.dataset.f)});
+$('#formSize').addEventListener('click',e=>{const b=e.target.closest('[data-size]'); if(!b) return; const n=+b.dataset.size; if(n===fSize()) return; const F=n===11?FORMATIONS[0]:SMALL_FORMS.find(f=>f.n===n); if(['through','long','switch'].includes(fMode)||/^(at|dv)-/.test(fMode)) fMode=fTab; setForm(F.id)});
 let fTab='att', fMode='att', fOpp=store.get('fopp','433');
 const TABS=[['att','Attack'],['def','Defend'],['cycle','Full cycle']];
 const GLY={
@@ -171,14 +176,17 @@ const gly=k=>`<svg viewBox="0 0 28 28" aria-hidden="true" fill="currentColor">${
 const ATT_CARDS=[['att','All phases','Build-up to finish','up'],...ATT_VARS.map(v=>[v.id,v.n,v.sub,v.ic]),['through','Beat the press','Through the striker','zig'],['long','Go long vs press','Skip the press','arc'],['switch','Switch via keeper','Use the spare man','swap']];
 const DEF_CARDS=[['def','Overview','Press, block, recover','layers'],['dv-man','Man-to-man','High press','man'],['dv-trap','Wide trap','Use the touchline','trap'],['dv-mid','Mid block','Zonal shifting','mid'],['dv-low','Low block','Defend crosses','low'],['dv-cpress','Counter-press','Win it in 5 s','cpress'],['dv-rest','Rest defence','Stop the counter','shield'],['dv-backpass','Back-pass trigger','Step up together','back']];
 function renderModes(){
-  const cards=fTab==='att'?ATT_CARDS:fTab==='def'?DEF_CARDS:null;
+  const sm=isSmall(curF);
+  const cards=fTab==='att'?(sm?ATT_CARDS.slice(0,1):ATT_CARDS):fTab==='def'?(sm?DEF_CARDS.slice(0,1):DEF_CARDS):null;
   $('#formModes').innerHTML=`<div class="ftabs ${fTab}" role="tablist">${TABS.map(([k,n])=>`<button role="tab" class="ftab ${k}" data-tab="${k}" aria-selected="${fTab===k}">${k==='cycle'?gly('cycle'):''}${n}</button>`).join('')}</div>`+
    (cards?`<div class="prail ${fTab}" role="group" aria-label="${fTab==='att'?'Attacking':'Defensive'} pattern">${cards.map(([k,n,sub,g])=>`<button class="pcard" data-mode="${k}" aria-pressed="${fMode===k}"><span class="pg">${gly(g)}</span><b>${n}</b><small>${sub}</small></button>`).join('')}</div>`:'')+
-   ((fTab==='def'&&fMode!=='def')||fMode.startsWith('at-')?`<div class="opprow"><span>Against</span><div class="oseg">${DV_OPPS.map(o=>{const O=FORMATIONS.find(f=>f.id===o); return `<button data-opp="${o}" aria-pressed="${fOpp===o}">${O.name}</button>`}).join('')}</div></div>`:'');
+   (sm&&fTab!=='cycle'?`<p class="hint smallnote">${curF.n}-a-side: a full ${fTab==='att'?'attacking':'defending'} walk-through against ${curF.n} players. The extra pattern library is for 11-a-side.</p>`:'')+
+   (!sm&&((fTab==='def'&&fMode!=='def')||fMode.startsWith('at-'))?`<div class="opprow"><span>Against</span><div class="oseg">${DV_OPPS.map(o=>{const O=FORMATIONS.find(f=>f.id===o); return `<button data-opp="${o}" aria-pressed="${fOpp===o}">${O.name}</button>`}).join('')}</div></div>`:'');
   const sel=$('#formModes .pcard[aria-pressed="true"]'); if(sel) keepInView(sel.parentElement,sel);
 }
 $('#formModes').addEventListener('click',e=>{const t=e.target.closest('[data-tab]'); if(t){fTab=t.dataset.tab; store.set('ftab',fTab); setForm(curF.id); return} const b=e.target.closest('[data-mode]'); if(b){setMode(b.dataset.mode); return} const o=e.target.closest('[data-opp]'); if(o){fOpp=o.dataset.opp; store.set('fopp',fOpp); setMode(fMode)}});
 function sceneFor(m){
+  if(isSmall(curF)) return smallScene(curF,m);
   if(m==='att') return withContext(attackScene(curF),{ours:false,oppCount:10});
   if(m==='def') return withContext(defendScene(curF),{ours:false,oppCount:10});
   if(m.startsWith('dv-')) return defVarScene(curF,m,fOpp);
@@ -188,7 +196,8 @@ function sceneFor(m){
 }
 function setMode(m){fMode=m; renderModes(); renderDefInfo(); boards.formations.load(sceneFor(m),!$('#v-formations').hidden); $$('#phaseChips .chip').forEach(c=>c.classList.remove('on'))}
 function setForm(id){
-  curF=FORMATIONS.find(f=>f.id===id)||FORMATIONS[0]; store.set('form',curF.id);
+  curF=formById(id)||FORMATIONS[0]; store.set('form',curF.id);
+  if(isSmall(curF)&&(['through','long','switch'].includes(fMode)||/^(at|dv)-/.test(fMode))) fMode=fTab;
   renderFormPick();
   const PL=PLANS[curF.id]||PLANS['433'];
   const jobs=(r)=>(JOB_OVR[curF.id]||{})[r]||JOBS[roleToPos(r)];
@@ -203,7 +212,7 @@ function setForm(id){
    <div class="card side-att"><p class="eyebrow" style="color:var(--teal)">In possession</p><h2 style="margin-top:6px">Attacking shape: ${curF.ipN}</h2>
     <dl class="plan" style="margin:14px 0 0"><dt>Build-up</dt><dd>${esc(PL.build)}</dd><dt>Progression</dt><dd>${esc(PL.prog)}</dd><dt>Final third</dt><dd>${esc(PL.final)}</dd><dt>When we win the ball</dt><dd>${esc(PL.toA)}</dd></dl></div>
    ${phase(ATT_PH)}
-   <div class="card"><h3>When you’re being pressed</h3>${li(PL.vs,'teal')}<div class="phases" style="margin-top:14px">${PRESS_ROUTES.map(([k,n])=>`<button class="chip" data-route="${k}">▶ ${n}</button>`).join('')}</div></div>
+   <div class="card"><h3>When you’re being pressed</h3>${li(PL.vs,'teal')}${isSmall(curF)?'':`<div class="phases" style="margin-top:14px">${PRESS_ROUTES.map(([k,n])=>`<button class="chip" data-route="${k}">▶ ${n}</button>`).join('')}</div>`}</div>
    <div class="card"><h3>Attacking strengths</h3>${li(curF.str,'teal')}</div>
    <div class="card"><h3>Every player’s job with the ball</h3><div class="roles">${roleRows(0)}</div><p class="hint">Tap a role to open its position deep dive.</p></div>`;
   else if(fTab==='def') body=`

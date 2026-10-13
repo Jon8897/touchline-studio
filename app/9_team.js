@@ -16,7 +16,8 @@ function saveDraft(){store.set('weekdraft',WK)}
 const modeLabel=m=>{const all=[...ATT_CARDS.map(c=>['Attack',c]),...DEF_CARDS.map(c=>['Defend',c])]; const f=all.find(([,c])=>c[0]===m); return m==='cycle'?'Full cycle':f?`${f[1][1]}`:'Shape'};
 const modeSide=m=>m==='cycle'?'cycle':(m==='def'||m.startsWith('dv-'))?'def':'att';
 function tacScene(formId,m,opp){
-  const F=FORMATIONS.find(f=>f.id===formId)||FORMATIONS[0];
+  const F=formById(formId)||FORMATIONS[0];
+  if(isSmall(F)) return smallScene(F,['att','def','cycle'].includes(m)?m:'att');
   if(m==='att') return withContext(attackScene(F),{ours:false,oppCount:10});
   if(m==='def') return withContext(defendScene(F),{ours:false,oppCount:10});
   if(m.startsWith('dv-')) return defVarScene(F,m,opp);
@@ -50,10 +51,10 @@ function renderWeek(){
     <p class="hint"><button class="link" id="liReset">Forgot PIN? Reset the coach area</button></p></div>`; setTimeout(()=>{const p=$('#liPin'); if(p) p.focus()},50); return}
   loadDraft();
   const saved=store.get('sessions',[]), plays=store.get('plays',[]), hist=SRV.on?SRV.weeks:store.get('weeks',[]);
-  const formOpts=FORMATIONS.map(f=>`<option value="${f.id}">${f.name} ${f.v}</option>`).join('');
+  const formOpts=allForms().map(f=>`<option value="${f.id}">${f.name} ${f.v}${f.n?` (${f.n}-a-side)`:''}</option>`).join('');
   const modeOpts=`<optgroup label="Attack">${ATT_CARDS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</optgroup><optgroup label="Defend">${DEF_CARDS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</optgroup><optgroup label="Other"><option value="cycle">Full cycle</option></optgroup>`;
   const oppOpts=DV_OPPS.map(o=>`<option value="${o}">${FORMATIONS.find(f=>f.id===o).name}</option>`).join('');
-  const itemRow=(it,i)=>{const lab=it.t==='tac'?`${(FORMATIONS.find(f=>f.id===it.form)||{}).name||''} · ${modeLabel(it.mode)}`:it.t==='play'?it.title:it.t==='drill'?(drillById(it.id)||{name:'Deleted drill'}).name:'';
+  const itemRow=(it,i)=>{const lab=it.t==='tac'?`${(formById(it.form)||{}).name||''} · ${modeLabel(it.mode)}`:it.t==='play'?it.title:it.t==='drill'?(drillById(it.id)||{name:'Deleted drill'}).name:'';
     const kind=it.t==='tac'?(modeSide(it.mode)==='def'?'DEF':'ATT'):it.t==='play'?'PLAY':'DRILL';
     return `<li class="wkitem"><div class="wkih"><span class="k ${kind==='DEF'?'d':'a'}">${kind}</span><b>${esc(lab)}</b><span class="bsp"></span><button class="ibtn" data-iu="${i}" aria-label="Move up" ${i===0?'disabled':''}>${IB.up}</button><button class="ibtn" data-id2="${i}" aria-label="Move down" ${i===WK.items.length-1?'disabled':''}>${IB.down}</button><button class="ibtn" data-ix="${i}" aria-label="Remove">${IB.del}</button></div>
       <textarea class="wknote" data-inote="${i}" rows="2" placeholder="Note for the players (optional)">${esc(it.note||'')}</textarea></li>`};
@@ -215,13 +216,13 @@ async function openPlayer(data){
     ${W.sheet&&typeof sheetSection==='function'?sheetSection(W.sheet,W):''}
     ${W.msg?`<section class="card pvmsg"><h3>From ${esc(W.coach||'the coach')}</h3><p>${esc(W.msg).replace(/\n/g,'<br>')}</p></section>`:''}
     ${trainHtml?`<div class="sechead"><h2>Training</h2><span class="muted">${W.train.length} session${W.train.length>1?'s':''}</span></div><div class="pvlist">${trainHtml}</div>`:''}
-    ${boardItems.length?`<div class="sechead"><h2>Tactics to study</h2><span class="muted">Tap play on each board</span></div><div class="pvtacs">${boardItems.map((it,i)=>`<article class="card pvtac"><p class="eyebrow" style="color:var(--${it.t==='tac'&&modeSide(it.mode)==='def'?'red':'teal'})">${it.t==='tac'?(modeSide(it.mode)==='def'?'Defending':modeSide(it.mode)==='att'?'Attacking':'Full cycle'):'Coach play'}</p><h3 class="pvh">${esc(it.t==='tac'?`${(FORMATIONS.find(f=>f.id===it.form)||{}).name||''} · ${modeLabel(it.mode)}`:it.title)}</h3>${it.note?`<p class="pvnote">${esc(it.note)}</p>`:''}<div class="pvboard" data-pvi="${i}"></div></article>`).join('')}</div>`:''}
+    ${boardItems.length?`<div class="sechead"><h2>Tactics to study</h2><span class="muted">Tap play on each board</span></div><div class="pvtacs">${boardItems.map((it,i)=>`<article class="card pvtac"><p class="eyebrow" style="color:var(--${it.t==='tac'&&modeSide(it.mode)==='def'?'red':'teal'})">${it.t==='tac'?(modeSide(it.mode)==='def'?'Defending':modeSide(it.mode)==='att'?'Attacking':'Full cycle'):'Coach play'}</p><h3 class="pvh">${esc(it.t==='tac'?`${(formById(it.form)||{}).name||''} · ${modeLabel(it.mode)}`:it.title)}</h3>${it.note?`<p class="pvnote">${esc(it.note)}</p>`:''}<div class="pvboard" data-pvi="${i}"></div></article>`).join('')}</div>`:''}
     ${drillItems.length?`<div class="sechead"><h2>Drills to practise</h2></div><div class="dgrid">${drillItems.map(it=>drillCard(drillById(it.id),false)).join('')}</div>${drillItems.some(i=>i.note)?`<div class="card" style="margin-top:12px">${drillItems.filter(i=>i.note).map(i=>`<p><b>${esc(drillById(i.id).name)}:</b> ${esc(i.note)}</p>`).join('')}</div>`:''}`:''}
     <div class="pvfoot"><button class="btn ghost" data-exitpv>Open the full Touchline Studio</button></div>
     <p class="pvlegal">Something wrong or worrying on this page? <button class="link" data-report="concern">Report a concern</button> · <a href="/privacy">Privacy</a> · <a href="/safeguarding">Safeguarding</a><br><a class="kcredit" href="https://keefecodes.com/" target="_blank" rel="noopener">Created by <b>KeefeCodes</b></a></p>
   </div>`;
   $$('.pvboard',$('#pv')).forEach(host=>{const it=boardItems[+host.dataset.pvi]; const sc=it.t==='tac'?tacScene(it.form,it.mode,it.opp):(()=>{const s={...it.play,view:'full'}; return (typeof autoShift==='function')?autoShift(s):s})();
-    const b=new Board(host,{}); b.load({...sc,tag:it.t==='tac'?(FORMATIONS.find(f=>f.id===it.form)||{}).name:it.title},false); pvBoards.push(b); host._b=b});
+    const b=new Board(host,{}); b.load({...sc,tag:it.t==='tac'?(formById(it.form)||{}).name:it.title},false); pvBoards.push(b); host._b=b});
   if('IntersectionObserver' in window&&!RM){pvIO=new IntersectionObserver(es=>es.forEach(en=>{const b=en.target._b; if(!b) return; if(en.isIntersecting&&en.intersectionRatio>.55) b.play(); else b.stop()}),{threshold:[0,.55,.9]}); $$('.pvboard',$('#pv')).forEach(h=>pvIO.observe(h))}
   document.title=`${W.title} · ${W.team||'Touchline Studio'}`;
 }

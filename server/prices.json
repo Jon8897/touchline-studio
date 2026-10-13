@@ -1,0 +1,12 @@
+{
+  "_help": "Plan prices in each currency, in pence/cents. The website, the app and Stripe all use this file. After changing a number, release the site and run:  node admin.js stripe-currencies",
+  "default": "gbp",
+  "currencies": {
+    "gbp": { "symbol": "£",   "code": "GBP", "name": "British pounds",      "coach_monthly": 499, "coach_yearly": 3900, "club_monthly": 1999, "extra_monthly": 200, "extra_yearly": 2000 },
+    "eur": { "symbol": "€",   "code": "EUR", "name": "Euros",               "coach_monthly": 599, "coach_yearly": 4900, "club_monthly": 2399, "extra_monthly": 250, "extra_yearly": 2500 },
+    "usd": { "symbol": "$",   "code": "USD", "name": "US dollars",          "coach_monthly": 599, "coach_yearly": 4900, "club_monthly": 2499, "extra_monthly": 250, "extra_yearly": 2500 },
+    "cad": { "symbol": "CA$", "code": "CAD", "name": "Canadian dollars",    "coach_monthly": 799, "coach_yearly": 6500, "club_monthly": 3299, "extra_monthly": 350, "extra_yearly": 3200 },
+    "aud": { "symbol": "A$",  "code": "AUD", "name": "Australian dollars",  "coach_monthly": 899, "coach_yearly": 7500, "club_monthly": 3699, "extra_monthly": 350, "extra_yearly": 3500 },
+    "nzd": { "symbol": "NZ$", "code": "NZD", "name": "New Zealand dollars", "coach_monthly": 999, "coach_yearly": 7900, "club_monthly": 3999, "extra_monthly": 400, "extra_yearly": 3900 }
+  }
+}

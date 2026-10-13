@@ -17,6 +17,7 @@
    node admin.js stripe-setup                  create the Stripe products, prices, founder coupon, billing portal and webhook (prints the settings to copy into .env)
    node admin.js comp <email> [months] [teams] give a coach free access (demo / partner accounts); months 0 removes it
    node admin.js founders [--mark-all]         list founding coaches, or mark everyone who has signed up so far
+   node admin.js stripe-currencies             add euros, dollars etc. (from prices.json) to the Stripe prices you already have
    node admin.js billing <email>               a coach's plan and Stripe status */
 process.removeAllListeners('warning');
 process.on('warning',w=>{if(w.name!=='ExperimentalWarning') console.warn(w)});
@@ -101,12 +102,15 @@ switch(cmd){
     (async()=>{
       const mode=B.liveMode?'LIVE':'TEST'; console.log(`Creating Touchline Studio products in Stripe ${mode} mode…`);
       const prod=(name,desc)=>stripe('POST','/v1/products',{name,description:desc,metadata:{app:'touchline'}});
-      const price=(product,amount,interval,nick)=>stripe('POST','/v1/prices',{product,unit_amount:amount,currency:'gbp',recurring:{interval},nickname:nick,tax_behavior:'inclusive',metadata:{app:'touchline'}});
+      const {MONEY}=require('./billing');
+      const opts=k=>Object.fromEntries(Object.entries(MONEY.currencies).filter(([c])=>c!==MONEY.default).map(([c,v])=>[c,{unit_amount:v[k],tax_behavior:'inclusive'}]));
+      const price=(product,k,interval,nick)=>{const base=MONEY.currencies[MONEY.default][k];
+        return stripe('POST','/v1/prices',{product,unit_amount:base,currency:MONEY.default,currency_options:opts(k),recurring:{interval},nickname:nick,tax_behavior:'inclusive',lookup_key:'touchline_'+k,metadata:{app:'touchline',plan_key:k}})};
       const coach=await prod('Touchline Studio Coach','1 team, unlimited weekly links, assistant coaches');
       const club=await prod('Touchline Studio Club','Up to 12 teams for a club');
       const extra=await prod('Touchline Studio extra team','One more active team on the Coach plan');
-      const p={COACH_MONTHLY:await price(coach.id,499,'month','Coach monthly'),COACH_YEARLY:await price(coach.id,3900,'year','Coach yearly'),CLUB_MONTHLY:await price(club.id,1999,'month','Club monthly'),
-        EXTRA_TEAM_MONTHLY:await price(extra.id,200,'month','Extra team monthly'),EXTRA_TEAM_YEARLY:await price(extra.id,2000,'year','Extra team yearly')};
+      const p={COACH_MONTHLY:await price(coach.id,'coach_monthly','month','Coach monthly'),COACH_YEARLY:await price(coach.id,'coach_yearly','year','Coach yearly'),CLUB_MONTHLY:await price(club.id,'club_monthly','month','Club monthly'),
+        EXTRA_TEAM_MONTHLY:await price(extra.id,'extra_monthly','month','Extra team monthly'),EXTRA_TEAM_YEARLY:await price(extra.id,'extra_yearly','year','Extra team yearly')};
       const coupon=await stripe('POST','/v1/coupons',{percent_off:50,duration:'forever',name:'Founding coach: half price for life',metadata:{app:'touchline'}});
       const portal=await stripe('POST','/v1/billing_portal/configurations',{business_profile:{headline:'Touchline Studio: manage your plan',privacy_policy_url:CFG.base+'/privacy',terms_of_service_url:CFG.base+'/terms'},
         features:{customer_update:{enabled:true,allowed_updates:['email','address']},invoice_history:{enabled:true},payment_method_update:{enabled:true},
@@ -119,6 +123,16 @@ switch(cmd){
       console.log(`STRIPE_FOUNDER_COUPON=${coupon.id}\nSTRIPE_PORTAL_CONFIG=${portal.id}\nSTRIPE_WEBHOOK_SECRET=${hook.secret}\nPAYMENTS=on`);
       console.log(`\nWebhook sends to ${hook.url}. Run this once on staging (test keys) and once on production (live keys).`);
     })().catch(e=>{console.error('Stripe said: '+e.message); process.exit(1)}); break}
+  case 'stripe-currencies':{
+    /* add (or update) the other currencies on the prices stripe-setup already made, using prices.json */
+    const {stripe,B,MONEY,money}=require('./billing'); if(!B.key){console.error('Set STRIPE_SECRET_KEY first.'); process.exit(1)}
+    const map={coach_monthly:B.price.coach_monthly,coach_yearly:B.price.coach_yearly,club_monthly:B.price.club_monthly,extra_monthly:B.price.extra_monthly,extra_yearly:B.price.extra_yearly};
+    (async()=>{for(const [k,id] of Object.entries(map)){ if(!id){console.log(`skip ${k}: no price id in .env`); continue}
+      const base=MONEY.default;
+      const currency_options=Object.fromEntries(Object.entries(MONEY.currencies).filter(([c])=>c!==base).map(([c,v])=>[c,{unit_amount:v[k],tax_behavior:'inclusive'}]));
+      await stripe('POST',`/v1/prices/${encodeURIComponent(id)}`,{currency_options});
+      console.log(`${k.padEnd(14)} ${Object.entries(MONEY.currencies).map(([c,v])=>money(c,v[k])).join('  ')}`)}
+      console.log(`\nDone in Stripe ${B.liveMode?'LIVE':'TEST'} mode. Checkout now charges in the currency the coach picks.`)})().catch(e=>{console.error('Stripe said: '+e.message); process.exit(1)}); break}
   case 'comp':{
     const u=user(args[0]); const months=args[1]===undefined?12:+args[1]; const teams=args[2]?Math.max(1,+args[2]):Math.max(u.max_teams||3,3);
     const until=months>0?Date.now()+months*30.44*864e5:null;

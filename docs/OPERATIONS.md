@@ -23,7 +23,8 @@ touchline-docker admin production <command>      # or: staging
 | `billing <email>` | A coach's plan, Stripe status, renewal and trial dates |
 | `comp <email> [months] [teams]` | Free access for demo or partner accounts (`0` months removes it) |
 | `founders [--mark-all]` | List founding coaches, or mark everyone so far |
-| `stripe-setup` | Create Stripe products, prices, coupon, billing page and webhook |
+| `stripe-setup` | Create Stripe products, prices (in every currency), coupon, billing page and webhook |
+| `stripe-currencies` | Add or update the euro, dollar etc. prices from `prices.json` on your existing Stripe prices |
 | `test-email <address>` | Check email settings |
 
 ## Routines
@@ -55,3 +56,8 @@ docker compose start touchline-live
 - **Payments look wrong**: `touchline-docker admin production billing their@email`; in Stripe, **Developers → Webhooks** shows every event and whether it was delivered. Failed deliveries are retried automatically.
 - **Data breach** (someone may have got at personal data): follow the breach steps in the Launch pack. You have **72 hours** to report it to the Information Commission if it's a risk to people.
 - **Lost the beta password**: run `openssl passwd -apr1 NEWPASSWORD`, put `BETA_AUTH='tester:<the result>'` in `/opt/apps/touchline/.env`, then `cd /opt/apps/touchline && docker compose up -d touchline-beta`.
+
+## Prices and currencies
+All prices live in `server/prices.json`, in pence/cents, for GBP, EUR, USD, CAD, AUD and NZD. The website, the app and Stripe all read it. Visitors see their own currency (guessed from their time zone and language) and can switch it; checkout charges in that currency. Once a coach has paid, their plan stays in that currency.
+
+To change a price: edit `prices.json`, release, then run `touchline-docker admin staging stripe-currencies` and `touchline-docker admin production stripe-currencies`. (Changing the GBP amount itself needs new Stripe prices: run `stripe-setup` instead, and existing subscribers keep their old price.)

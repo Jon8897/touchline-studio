@@ -43,13 +43,14 @@ function fakeStripe(req, res) {
       for (const s of Object.values(subs)) { const i = s.items.data.findIndex(x => x.id === m[1]); if (i > -1) { if (req.method === 'DELETE') s.items.data.splice(i, 1); else s.items.data[i].quantity = +p.get('quantity'); return j(200, {}); } }
       return j(404, { error: { message: 'no item' } });
     }
+    if (req.method === 'POST' && (m = url.pathname.match(/^\/v1\/prices\/(\w+)$/))) return j(200, { id: m[1] });
     const gen = { '/v1/products': 'prod', '/v1/prices': 'price', '/v1/coupons': 'coup', '/v1/billing_portal/configurations': 'bpc', '/v1/webhook_endpoints': 'we' }[url.pathname];
     if (req.method === 'POST' && gen) return j(200, { id: gen + '_' + crypto.randomBytes(3).toString('hex'), ...(gen === 'we' ? { secret: 'whsec_new', url: p.get('url') } : {}) });
     j(404, { error: { message: 'not faked: ' + url.pathname } });
   });
 }
-function makeSub(id, customer, userId, { status = 'trialing', price = PRICE.cm } = {}) {
-  subs[id] = { id, object: 'subscription', customer, status, cancel_at_period_end: false, current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400, trial_end: status === 'trialing' ? Math.floor(Date.now() / 1000) + 14 * 86400 : null,
+function makeSub(id, customer, userId, { status = 'trialing', price = PRICE.cm, currency = 'gbp' } = {}) {
+  subs[id] = { id, object: 'subscription', customer, status, currency, cancel_at_period_end: false, current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400, trial_end: status === 'trialing' ? Math.floor(Date.now() / 1000) + 14 * 86400 : null,
     metadata: { user_id: userId }, items: { data: [{ id: 'si_main', quantity: 1, price: { id: price, recurring: { interval: price === PRICE.cy ? 'year' : 'month' } } }] } };
   return subs[id];
 }
@@ -186,7 +187,37 @@ test('stripe-setup creates the products, prices, coupon, portal and webhook and 
   for (const k of ['STRIPE_PRICE_COACH_MONTHLY=price_', 'STRIPE_PRICE_COACH_YEARLY=price_', 'STRIPE_PRICE_CLUB_MONTHLY=price_', 'STRIPE_PRICE_EXTRA_TEAM_MONTHLY=price_', 'STRIPE_PRICE_EXTRA_TEAM_YEARLY=price_', 'STRIPE_FOUNDER_COUPON=coup_', 'STRIPE_PORTAL_CONFIG=bpc_', 'STRIPE_WEBHOOK_SECRET=whsec_new', 'PAYMENTS=on']) assert.ok(r.stdout.includes(k), k);
   const prices = calls.filter(x => x.path === '/v1/prices').map(x => [x.params.unit_amount, x.params['recurring[interval]'], x.params.currency]);
   assert.deepEqual(prices, [['499', 'month', 'gbp'], ['3900', 'year', 'gbp'], ['1999', 'month', 'gbp'], ['200', 'month', 'gbp'], ['2000', 'year', 'gbp']]);
+  const first = calls.find(x => x.path === '/v1/prices').params;
+  assert.equal(first['currency_options[eur][unit_amount]'], '599'); assert.equal(first['currency_options[usd][unit_amount]'], '599'); assert.equal(first['currency_options[aud][unit_amount]'], '899'); assert.equal(first['currency_options[eur][tax_behavior]'], 'inclusive');
   const hook = calls.find(x => x.path === '/v1/webhook_endpoints').params;
   assert.match(hook.url, /\/api\/webhooks\/stripe$/); assert.equal(hook['enabled_events[0]'], 'checkout.session.completed');
   assert.equal(calls.find(x => x.path === '/v1/billing_portal/configurations').params['features[subscription_cancel][mode]'], 'at_period_end');
+});
+
+test('prices in the visitor currency; checkout charges in it; a paying coach currency is then fixed', async () => {
+  const c = client(); await signup(c, 'euro@test.dev');
+  let b = (await c.get('/api/billing?currency=eur')).json;
+  assert.equal(b.currency, 'eur'); assert.equal(b.prices.coach.monthly, '€5.99 a month'); assert.equal(b.prices.club.monthly, '€23.99 a month'); assert.equal(b.currencyLocked, false);
+  assert.equal((await c.get('/api/billing?currency=usd')).json.prices.coach.yearly, '$49 a year');
+  assert.equal((await c.get('/api/billing?currency=xyz')).json.currency, 'gbp', 'unknown currency falls back to pounds');
+  assert.equal((await c.get('/api/billing')).json.prices.coach.monthly, '£4.99 a month');
+  await c.post('/api/billing/checkout', { plan: 'coach_monthly', consent: true, currency: 'eur' });
+  const s = calls.filter(x => x.path === '/v1/checkout/sessions').pop().params;
+  assert.equal(s.currency, 'eur'); assert.match(s['custom_text[submit][message]'], /€5\.99 a month/);
+  makeSub('sub_eur', s.customer, s.client_reference_id, { currency: 'eur' });
+  await webhook({ id: 'evt_eur', type: 'checkout.session.completed', data: { object: { object: 'checkout.session', client_reference_id: s.client_reference_id, customer: s.customer, subscription: 'sub_eur' } } });
+  b = (await c.get('/api/billing?currency=usd')).json;
+  assert.equal(b.currency, 'eur', 'stays in euros once paid'); assert.equal(b.currencyLocked, true); assert.equal(b.prices.extra.monthly, '€2.50 a month');
+});
+
+test('stripe-currencies adds the other currencies to existing prices', async () => {
+  const before = calls.length;
+  const r = await new Promise(res => { const ch = spawn(process.execPath, ['--no-warnings', 'admin.js', 'stripe-currencies'], { cwd: PKG, env: { ...ENV(1), DB_PATH: path.join(tmp, 'c.db') } }); let stdout = '', stderr = '';
+    ch.stdout.on('data', d => stdout += d); ch.stderr.on('data', d => stderr += d); ch.on('close', status => res({ status, stdout, stderr })); });
+  assert.equal(r.status, 0, r.stderr);
+  const ups = calls.slice(before).filter(x => x.method === 'POST' && x.path.startsWith('/v1/prices/'));
+  assert.equal(ups.length, 5);
+  const cm = ups.find(x => x.path === '/v1/prices/' + PRICE.cm).params;
+  assert.equal(cm['currency_options[nzd][unit_amount]'], '999'); assert.equal(cm['currency_options[cad][unit_amount]'], '799'); assert.ok(!('currency_options[gbp][unit_amount]' in cm));
+  assert.match(r.stdout, /€5\.99/);
 });

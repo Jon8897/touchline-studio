@@ -51,3 +51,6 @@ function initLanding(){
   if('IntersectionObserver' in window&&!RM){const io=new IntersectionObserver(es=>es.forEach(en=>{const b=en.target===$('#heroBoard')?hBoard:dBoard; if(en.isIntersecting) b.play(); else b.stop()}),{threshold:.25}); io.observe($('#heroBoard')); io.observe($('#demoBoard'))}
 }
 initLanding();
+
+/* prices in the visitor's currency */
+(()=>{const c=curGuess(); document.querySelectorAll('select[data-cursel]').forEach(s=>{s.innerHTML=curOptions(c); s.addEventListener('change',()=>{curSet(s.value); curApply(s.value)})}); curApply(c)})();

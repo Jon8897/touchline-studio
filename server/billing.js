@@ -36,13 +36,22 @@ if (B.on && CFG.env !== 'production' && B.liveMode) { console.error('Refusing to
   const add = (c, def) => { if (!cols.includes(c)) db.exec(`ALTER TABLE users ADD COLUMN ${c} ${def}`); };
   add('extra_teams', 'INTEGER NOT NULL DEFAULT 0'); add('founder', 'INTEGER NOT NULL DEFAULT 0'); add('comp_until', 'INTEGER');
   add('period_end', 'INTEGER'); add('cancel_at_end', 'INTEGER NOT NULL DEFAULT 0'); add('trial_end', 'INTEGER');
-  add('trial_used', 'INTEGER NOT NULL DEFAULT 0'); add('billing_consent_at', 'INTEGER'); add('billing_interval', 'TEXT');
+  add('trial_used', 'INTEGER NOT NULL DEFAULT 0'); add('billing_consent_at', 'INTEGER'); add('billing_interval', 'TEXT'); add('billing_currency', 'TEXT');
   db.exec(`CREATE TABLE IF NOT EXISTS stripe_events(id TEXT PRIMARY KEY, type TEXT NOT NULL, received INTEGER NOT NULL);
            CREATE INDEX IF NOT EXISTS users_customer ON users(billing_customer);`);
 }
 
 /* ---------- plans ---------- */
-const PRICES = { coach: { monthly: '£4.99 a month', yearly: '£39 a year' }, club: { monthly: '£19.99 a month' }, extra: { monthly: '£2 a month', yearly: '£20 a year' } };
+/* prices in every currency come from prices.json (also used by the website and by stripe-setup / stripe-currencies) */
+const MONEY = require('./prices.json');
+const CURRENCIES = Object.keys(MONEY.currencies);
+const validCur = c => (c = String(c || '').toLowerCase(), CURRENCIES.includes(c) ? c : null);
+const money = (cur, minor) => { const C = MONEY.currencies[cur]; return C.symbol + (minor % 100 ? (minor / 100).toFixed(2) : String(minor / 100)); };
+const pricesFor = cur => { const C = MONEY.currencies[cur], m = k => money(cur, C[k]);
+  return { coach: { monthly: m('coach_monthly') + ' a month', yearly: m('coach_yearly') + ' a year' }, club: { monthly: m('club_monthly') + ' a month' }, extra: { monthly: m('extra_monthly') + ' a month', yearly: m('extra_yearly') + ' a year' } }; };
+/* a coach's currency is fixed once they have paid in it (Stripe keeps one currency per customer) */
+const currencyOf = (u, wanted) => validCur(u.billing_currency) || validCur(wanted) || MONEY.default;
+const PRICES = pricesFor(MONEY.default);
 const PAID_STATUSES = ['active', 'trialing', 'past_due'];
 const LIMITS = {
   free: { teams: 1, weeksPerTeam: 1, assistants: false },
@@ -102,22 +111,22 @@ function applySubscription(user, sub) {
   const periodEnd = sub.current_period_end || (items[0] && items[0].current_period_end) || null;
   const plan = main ? planOfPrice(main.price.id) : user.plan;
   const interval = main && main.price.recurring ? main.price.recurring.interval : null;
-  db.prepare(`UPDATE users SET plan=?, billing_status=?, billing_subscription=?, billing_customer=COALESCE(?,billing_customer), extra_teams=?, period_end=?, cancel_at_end=?, trial_end=?, billing_interval=?, trial_used=1 WHERE id=?`)
+  db.prepare(`UPDATE users SET plan=?, billing_status=?, billing_subscription=?, billing_customer=COALESCE(?,billing_customer), extra_teams=?, period_end=?, cancel_at_end=?, trial_end=?, billing_interval=?, billing_currency=COALESCE(?,billing_currency), trial_used=1 WHERE id=?`)
     .run(plan || 'free', sub.status, sub.id, typeof sub.customer === 'string' ? sub.customer : (sub.customer && sub.customer.id) || null,
-      plan === 'coach' && extra ? extra.quantity || 0 : 0, periodEnd ? periodEnd * 1000 : null, sub.cancel_at_period_end ? 1 : 0, sub.trial_end ? sub.trial_end * 1000 : null, interval, user.id);
+      plan === 'coach' && extra ? extra.quantity || 0 : 0, periodEnd ? periodEnd * 1000 : null, sub.cancel_at_period_end ? 1 : 0, sub.trial_end ? sub.trial_end * 1000 : null, interval, validCur(sub.currency), user.id);
 }
 const userForStripe = (customerId, userId) => (userId && db.prepare('SELECT * FROM users WHERE id=?').get(userId)) || (customerId && db.prepare('SELECT * FROM users WHERE billing_customer=?').get(customerId)) || null;
 
 /* ---------- routes ---------- */
 function install({ route, send, fail, Mail, limited }) {
   const base = CFG.base;
-  const summary = u => {
+  const summary = (u, wanted) => { const cur = currencyOf(u, wanted);
     const e = entitlements(u), teamsUsed = db.prepare('SELECT COUNT(*) n FROM teams WHERE owner_id=? AND archived=0').get(u.id).n;
     return { ...e, teams: Number.isFinite(e.teams) ? e.teams : null, weeksPerTeam: Number.isFinite(e.weeksPerTeam) ? e.weeksPerTeam : null, teamsUsed,
       subscription: u.billing_subscription ? { status: u.billing_status, plan: u.plan, interval: u.billing_interval, extraTeams: u.extra_teams || 0, periodEnd: u.period_end, cancelAtPeriodEnd: !!u.cancel_at_end, trialEnd: u.trial_end } : null,
-      founder: !!u.founder, trialDays: u.trial_used ? 0 : B.trialDays, prices: PRICES, testMode: B.on && !B.liveMode, ready: !!(B.key && B.price.coach_monthly) };
+      founder: !!u.founder, trialDays: u.trial_used ? 0 : B.trialDays, prices: pricesFor(cur), currency: cur, currencyLocked: !!validCur(u.billing_currency), currencies: CURRENCIES.map(c => ({ code: c, label: MONEY.currencies[c].symbol + ' ' + MONEY.currencies[c].code })), testMode: B.on && !B.liveMode, ready: !!(B.key && B.price.coach_monthly) };
   };
-  route('GET', '/api/billing', (req, res, { user }) => send(res, 200, summary(user)));
+  route('GET', '/api/billing', (req, res, { user }) => send(res, 200, summary(user, new URL(req.url, 'http://x').searchParams.get('currency'))));
 
   route('POST', '/api/billing/checkout', async (req, res, { user, body }) => {
     if (!B.on) return fail(res, 400, 'Payments aren’t switched on.');
@@ -126,7 +135,7 @@ function install({ route, send, fail, Mail, limited }) {
     if (!choice || !B.price[choice]) return fail(res, 400, 'Choose a plan.');
     if (body.consent !== true) return fail(res, 400, 'Please tick the box to agree to the payment terms.');
     if (PAID_STATUSES.includes(user.billing_status)) return fail(res, 409, 'You already have a plan. Use “Manage billing” to change it.');
-    const interval = choice.endsWith('yearly') ? 'yearly' : 'monthly';
+    const interval = choice.endsWith('yearly') ? 'yearly' : 'monthly', cur = currencyOf(user, body.currency);
     const extra = choice.startsWith('coach') ? Math.max(0, Math.min(20, parseInt(body.extraTeams, 10) || 0)) : 0;
     try {
       let customer = user.billing_customer;
@@ -137,9 +146,9 @@ function install({ route, send, fail, Mail, limited }) {
       const line_items = [{ price: B.price[choice], quantity: 1 }];
       if (extra && B.price['extra_' + interval]) line_items.push({ price: B.price['extra_' + interval], quantity: extra });
       const trial = user.trial_used ? 0 : B.trialDays;
-      const amount = PRICES[choice.split('_')[0]][interval];
+      const amount = pricesFor(cur)[choice.split('_')[0]][interval];
       const params = {
-        mode: 'subscription', customer, client_reference_id: user.id, line_items,
+        mode: 'subscription', customer, client_reference_id: user.id, line_items, currency: cur,
         success_url: `${base}/app?billing=done#week`, cancel_url: `${base}/app?billing=cancelled#week`,
         subscription_data: { metadata: { user_id: user.id }, ...(trial ? { trial_period_days: trial } : {}) },
         billing_address_collection: 'auto',
@@ -227,4 +236,4 @@ async function handleWebhook(req, res, { send, fail, readRaw, Mail }) {
   }
 }
 
-module.exports = { B, entitlements, ownerOf, install, handleWebhook, stripe, verifySignature, PRICES };
+module.exports = { B, entitlements, ownerOf, install, handleWebhook, stripe, verifySignature, PRICES, MONEY, money, pricesFor };

@@ -2,7 +2,7 @@
    The server decides what each plan allows; this only shows it and sends coaches to Stripe. */
 let BILL = null;
 const fmtDay = ms => ms ? new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-async function loadBilling() { try { BILL = await api('GET', '/api/billing'); } catch (e) { BILL = null; } return BILL; }
+async function loadBilling(cur) { try { BILL = await api('GET', '/api/billing?currency=' + encodeURIComponent(cur || (typeof curGuess === 'function' ? curGuess() : ''))); } catch (e) { BILL = null; } return BILL; }
 
 function billingCard() {
   if (!SRV.on || !SRV.plan || !SRV.plan.payments) return '';
@@ -58,19 +58,20 @@ function openUpgrade(reason) {
         </div>
         <div id="upExtraRow"><label class="fl" for="upExtra">Extra teams (optional)</label><input id="upExtra" class="inp" type="number" min="0" max="20" value="${Math.max(0, (B.teamsUsed || 1) - 1)}" style="max-width:120px"></div>
         <label class="check agree"><input type="checkbox" id="upConsent"><span>I want my plan to start now. I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/refunds" target="_blank" rel="noopener">Refund policy</a>, and understand it renews automatically until I cancel.${trial ? ` I won’t be charged if I cancel in the ${trial}-day free trial.` : ''}</span></label>
+        ${B.currencyLocked ? '' : `<div class="upcur"><label class="fl" for="upCur">Currency</label><select id="upCur" class="sel" style="max-width:200px">${(B.currencies || []).map(c => `<option value="${c.code}"${c.code === B.currency ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>`}
         <div class="frow"><button class="btn" id="upGo">Continue to secure payment</button></div>
         <p class="status" id="upSt" aria-live="polite"></p>
         <p class="hint">You’ll enter your card on Stripe’s secure page. ${trial ? 'Nothing is charged until the trial ends. ' : ''}Cancel any time under Team week → Plan &amp; billing.</p>
       </div></div>`;
     document.body.appendChild(el);
     const sync = () => { $('#upExtraRow').hidden = !String((el.querySelector('input[name=upPlan]:checked') || {}).value).startsWith('coach'); };
-    el.addEventListener('change', sync); sync();
+    el.addEventListener('change', async e => { if (e.target.id === 'upCur') { const keep = (el.querySelector('input[name=upPlan]:checked') || {}).value; if (typeof curSet === 'function') curSet(e.target.value); await loadBilling(e.target.value); el.remove(); await go(); const r = keep && $(`#upSheet input[value="${keep}"]`); if (r) r.checked = true; return; } sync(); }); sync();
     el.addEventListener('click', async e => {
       if (e.target === el || e.target.closest('[data-upx]')) return el.remove();
       if (e.target.closest('#upGo')) {
         const st = $('#upSt'); if (!$('#upConsent').checked) { st.className = 'status err'; st.textContent = 'Please tick the box to continue.'; return; }
         st.className = 'status'; st.textContent = 'Opening secure checkout…'; $('#upGo').disabled = true;
-        try { const r = await api('POST', '/api/billing/checkout', { plan: el.querySelector('input[name=upPlan]:checked').value, extraTeams: +$('#upExtra').value || 0, consent: true }); location.href = r.url; }
+        try { const r = await api('POST', '/api/billing/checkout', { plan: el.querySelector('input[name=upPlan]:checked').value, extraTeams: +$('#upExtra').value || 0, consent: true, currency: BILL && BILL.currency }); location.href = r.url; }
         catch (err) { st.className = 'status err'; st.textContent = err.message; $('#upGo').disabled = false; }
       }
     });

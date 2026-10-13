@@ -144,3 +144,4 @@ ul.tick.big li{font-size:17px;padding-left:26px}
 .lcta{align-items:center}
 .nf{min-height:50vh}.nf h1{font-size:clamp(64px,14vw,140px)}.nfbtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
 .legal a.lbtn{color:var(--gold-ink);text-decoration:none}.legal a.lbtn.ghost{color:var(--gold)}
+.cursel{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:3px 6px;font:600 13px var(--f-body);margin:0 4px}

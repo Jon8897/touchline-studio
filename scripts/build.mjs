@@ -38,7 +38,9 @@ const landingCss = read(path.join(APP, 'landing/landing.css'));
 const landingBodyRaw = read(path.join(APP, 'landing/body.html'));
 const landingJs = read(path.join(APP, 'landing/landing.js'));
 const demoDrills = JSON.stringify(JSON.parse(read(path.join(APP, 'landing/demo_drills.json'))));
-const appScript = js(APP_JS);
+/* prices in every currency (server/prices.json) + the visitor-currency helper, shared by the website and the app */
+const moneyJs = `const MONEY=${JSON.stringify(JSON.parse(read(path.join(SRV, 'prices.json'))))};\n${read(path.join(APP, 'landing/money.js'))}`;
+const appScript = moneyJs + '\n' + js(APP_JS);
 /* business details for the legal pages: {{businessName}} etc. Empty ones show as [fill in: ...] and block production */
 const LEGAL = JSON.parse(read(path.join(APP, 'legal-details.json')));
 const label = k => k.replace(/([A-Z])/g, ' $1').toLowerCase();
@@ -84,7 +86,7 @@ const appHtml = doc({
 });
 
 /* ---------- 2. the front page (/) ---------- */
-const DESC = 'Animated football tactics, 100 drills, a session planner and one weekly link for your players. Built for grassroots coaches. Free plan, no card needed.';
+const DESC = 'Animated football tactics, 100 drills, a session planner, team sheets for 5, 7, 9 and 11-a-side, and one weekly link for your players. Built for grassroots coaches. Free plan, no card needed.';
 const landingMeta = `<meta name="description" content="${DESC}">
 <link rel="canonical" href="__BASE__/">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Touchline Studio">
@@ -96,7 +98,7 @@ const landingHtml = doc({
   title: 'Touchline Studio · Football coaching made simple',
   meta: landingMeta,
   head: `${headNoTitle}\n<style>html{scroll-behavior:smooth}section[id]{scroll-margin-top:70px}${landingCss}</style>`,
-  body: `${landingBody}\n<script>\n${js(ENGINE_JS)}\nconst DEMO_DRILLS=${demoDrills};\n${landingJs}\n</script>`,
+  body: `${landingBody}\n<script>\n${moneyJs}\n${js(ENGINE_JS)}\nconst DEMO_DRILLS=${demoDrills};\n${landingJs}\n</script>`,
 });
 
 /* ---------- 3. legal and info pages (/privacy, /terms, /safeguarding, ...) ---------- */
@@ -152,7 +154,7 @@ const previewHtml = doc({
 /* ---------- write ---------- */
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(PUB, { recursive: true });
-for (const f of ['server.js', 'lib.js', 'mailer.js', 'billing.js', 'admin.js', 'package.json', '.env.example']) fs.copyFileSync(path.join(SRV, f), path.join(OUT, f));
+for (const f of ['server.js', 'lib.js', 'mailer.js', 'billing.js', 'admin.js', 'prices.json', 'package.json', '.env.example']) fs.copyFileSync(path.join(SRV, f), path.join(OUT, f));
 fs.writeFileSync(path.join(OUT, 'VERSION'), version + '\n');
 fs.writeFileSync(path.join(PUB, 'index.html'), appHtml);
 fs.writeFileSync(path.join(PUB, 'landing.html'), landingHtml);
